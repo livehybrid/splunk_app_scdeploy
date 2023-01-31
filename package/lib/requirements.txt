@@ -1,0 +1,2 @@
+boto3
+splunktaucclib>=5.0.4

@@ -1,0 +1,9 @@
+*.tar.gz
+.DS_Store
+.idea
+extras
+output
+poetry.lock
+package/local/
+tmp/
+__pycache__/

@@ -1,0 +1,257 @@
+{
+    "pages": {
+        "configuration": {
+            "tabs": [
+                {
+                    "name": "logging",
+                    "entity": [
+                        {
+                            "type": "singleSelect",
+                            "label": "Log level",
+                            "options": {
+                                "disableSearch": true,
+                                "autoCompleteFields": [
+                                    {
+                                        "value": "DEBUG",
+                                        "label": "DEBUG"
+                                    },
+                                    {
+                                        "value": "INFO",
+                                        "label": "INFO"
+                                    },
+                                    {
+                                        "value": "WARNING",
+                                        "label": "WARNING"
+                                    },
+                                    {
+                                        "value": "ERROR",
+                                        "label": "ERROR"
+                                    },
+                                    {
+                                        "value": "CRITICAL",
+                                        "label": "CRITICAL"
+                                    }
+                                ]
+                            },
+                            "defaultValue": "INFO",
+                            "field": "loglevel"
+                        }
+                    ],
+                    "title": "Logging"
+                },
+                {
+                    "name": "dest_gitlab",
+                    "table": {
+                        "actions": [
+                            "edit",
+                            "delete",
+                            "clone"
+                        ],
+                        "header": [
+                            {
+                                "label": "Name",
+                                "field": "name"
+                            },
+                            {
+                                "label": "GitLab Server",
+                                "field": "hostname"
+                            },
+                            {
+                                "label": "Project ID",
+                                "field": "projectid"
+                            }
+                        ]
+                    },
+                    "entity": [
+                        {
+                            "type": "text",
+                            "label": "Name",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of ID should be between 1 and 50",
+                                    "minLength": 1,
+                                    "maxLength": 50
+                                },
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                }
+                            ],
+                            "options": {
+                                "placeholder": "Required"
+                            },
+                            "field": "name",
+                            "help": "Enter a unique name for this destination.",
+                            "required": true
+                        },
+                        {
+                            "field": "help",
+                            "label": "",
+                            "type": "helpLink",
+                            "options": {
+                                "text": "GitLab.com Setup Help",
+                                "link": "https://docs.splunk.com/Documentation"
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "label": "GitLab Server",
+                            "options": {
+                                "placeholder": "gitlab.com or gitlab.yourdomain.com"
+                            },
+                            "field": "hostname",
+                            "help": "gitlab.com or gitlab.yourdomain.com",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "GitLab Auth Token",
+                            "options": {
+                                "placeholder": "Token to access your GitLab account"
+                            },
+                            "encrypted": true,
+                            "field": "token",
+                            "help": "Get help at Gitlab.com",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Project ID",
+                            "options": {
+                                "placeholder": "123"
+                            },
+                            "encrypted": false,
+                            "field": "projectid",
+                            "help": "Project ID to carry out actions against"
+                        }
+                    ],
+                    "title": "Destination - GitLab"
+                },
+                {
+                    "name": "dest_awssm",
+                    "table": {
+                        "actions": [
+                            "edit",
+                            "delete",
+                            "clone"
+                        ],
+                        "header": [
+                            {
+                                "label": "Name",
+                                "field": "name"
+                            },
+                            {
+                                "label": "IAM Role",
+                                "field": "iamrole"
+                            },
+                            {
+                                "label": "Secret Path",
+                                "field": "secretpath"
+                            }
+                        ]
+                    },
+                    "entity": [
+                        {
+                            "type": "text",
+                            "label": "Name",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of ID should be between 1 and 50",
+                                    "minLength": 1,
+                                    "maxLength": 50
+                                },
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                }
+                            ],
+                            "options": {
+                                "placeholder": "Required"
+                            },
+                            "field": "name",
+                            "help": "Enter a unique name for this destination.",
+                            "required": true
+                        },
+                        {
+                            "field": "help",
+                            "label": "",
+                            "type": "helpLink",
+                            "options": {
+                                "text": "AWS Secret Manager Setup",
+                                "link": "https://docs.splunk.com/Documentation"
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "label": "Region",
+                            "options": {
+                                "placeholder": "eu-west-2"
+                            },
+                            "field": "region",
+                            "help": "AWS Region",
+                            "defaultValue": "eu-west-2",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "IAM Role",
+                            "options": {
+                                "placeholder": "aws:arn::iam:1234567890:role/yourRole"
+                            },
+                            "field": "iamrole",
+                            "help": "Leave blank if no role required",
+                            "required": false,
+                            "encrypted": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "AWS Access ID",
+                            "options": {
+                                "placeholder": "ABCDEFGHJKI"
+                            },
+                            "encrypted": false,
+                            "field": "aws_accessid",
+                            "help": "Generate an Access/Secret in AWS Console",
+                            "required": false
+                        },
+                        {
+                            "type": "text",
+                            "label": "AWS Secret Key",
+                            "options": {
+                                "placeholder": "********"
+                            },
+                            "encrypted": true,
+                            "field": "aws_secretkey",
+                            "help": "Generate an Access/Secret in AWS Console",
+                            "required": false
+                        },
+                        {
+                            "type": "text",
+                            "label": "Secret Path",
+                            "options": {
+                                "placeholder": "/splunkcloud/acstoken"
+                            },
+                            "encrypted": false,
+                            "field": "secretpath",
+                            "help": "Secret Path for AWS Secrets Manager"
+                        }
+                    ],
+                    "title": "Destination - AWS Secret Manager"
+                }
+            ],
+            "title": "Configuration",
+            "description": "Configure the Add-on"
+        }
+    },
+    "meta": {
+        "name": "splunk_app_scdeploy",
+        "restRoot": "splunk_app_scdeploy",
+        "version": "1.2.0",
+        "displayName": "SplunkCloud Deployment Manager",
+        "schemaVersion": "0.0.3"
+    }
+}
