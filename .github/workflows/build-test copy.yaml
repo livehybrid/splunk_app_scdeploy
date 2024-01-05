@@ -50,13 +50,13 @@ jobs:
           poetry run splunk-appinspect inspect $PACKAGE --mode=precert --included-tags=private_victoria --data-format junitxml --output-file reports/$PACKAGE_ID-appinspect-cli.xml
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: splunkbase-package
           path: dist/
 
       - name: Upload Reports
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: reports
           path: reports
@@ -66,22 +66,16 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     container: cimg/go:1.19
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
-          path: /tmp/workspace
-
-      - name: "Publish on GitHub"
-        run: |
-          go install github.com/tcnksm/ghr@latest
-          ISPRE=""
-          [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]*.[0-9]*.[0-9]*$ ]] || ISPRE="-prerelease"
-          $HOME/go/bin/ghr -t ${GH_TOKEN} -u ${GITHUB_REPOSITORY_OWNER} -r $(basename ${GITHUB_REPOSITORY}) -c ${GITHUB_SHA} ${ISPRE} -delete "${GITHUB_REF_NAME}" /tmp/workspace/splunkbase-package
-          $HOME/go/bin/ghr -t ${GH_TOKEN} -u ${GITHUB_REPOSITORY_OWNER} -r $(basename ${GITHUB_REPOSITORY}) -c ${GITHUB_SHA} ${ISPRE} "${GITHUB_REF_NAME}" /tmp/workspace/deployment-package
-
-env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          path: dist
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "dist/*"
