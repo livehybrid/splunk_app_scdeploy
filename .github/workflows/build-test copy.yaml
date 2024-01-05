@@ -20,7 +20,9 @@ jobs:
           cache: "poetry"
           architecture: "x64"
       - name: "Setup Environment"
-        run: poetry install
+        run: |
+          poetry install
+          poetry shell
 
       - name: Generate Documentation
         run: |
