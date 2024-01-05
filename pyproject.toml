@@ -37,6 +37,7 @@ wheel = "*"
 splunk-appinspect = "*"
 typing-extensions = "*"
 attr = "^0.3.2"
+grip = "^4.6.2"
 
 
 [tool.pytest.ini_options]

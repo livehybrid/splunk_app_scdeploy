@@ -368,6 +368,16 @@ files = [
 ]
 
 [[package]]
+name = "docopt"
+version = "0.6.2"
+description = "Pythonic argument parser, that will make you smile"
+optional = false
+python-versions = "*"
+files = [
+    {file = "docopt-0.6.2.tar.gz", hash = "sha256:49b3a825280bd66b3aa83585ef59c4a8c82f2c8a522dbe754a8bc8d08c85c491"},
+]
+
+[[package]]
 name = "dunamai"
 version = "1.19.0"
 description = "Dynamic version generation"
@@ -467,6 +477,28 @@ docs = ["furo (>=2023.5.20)", "sphinx (>=7.0.1)", "sphinx-autodoc-typehints (>=1
 testing = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "diff-cover (>=7.5)", "pytest (>=7.3.1)", "pytest-cov (>=4.1)", "pytest-mock (>=3.10)", "pytest-timeout (>=2.1)"]
 
 [[package]]
+name = "flask"
+version = "2.2.5"
+description = "A simple framework for building complex web applications."
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "Flask-2.2.5-py3-none-any.whl", hash = "sha256:58107ed83443e86067e41eff4631b058178191a355886f8e479e347fa1285fdf"},
+    {file = "Flask-2.2.5.tar.gz", hash = "sha256:edee9b0a7ff26621bd5a8c10ff484ae28737a2410d99b0bb9a6850c7fb977aa0"},
+]
+
+[package.dependencies]
+click = ">=8.0"
+importlib-metadata = {version = ">=3.6.0", markers = "python_version < \"3.10\""}
+itsdangerous = ">=2.0"
+Jinja2 = ">=3.0"
+Werkzeug = ">=2.2.2"
+
+[package.extras]
+async = ["asgiref (>=3.2)"]
+dotenv = ["python-dotenv"]
+
+[[package]]
 name = "future"
 version = "0.18.3"
 description = "Clean single-source support for Python 3 and 2"
@@ -499,6 +531,29 @@ files = [
 
 [package.dependencies]
 futures = "*"
+
+[[package]]
+name = "grip"
+version = "4.6.2"
+description = "Render local readme files before sending off to GitHub."
+optional = false
+python-versions = "*"
+files = [
+    {file = "grip-4.6.2-py3-none-any.whl", hash = "sha256:f2192e9d75b603d3de4a2c80ba70d82c7d9ebaade650306e41a7583966d0ed88"},
+    {file = "grip-4.6.2.tar.gz", hash = "sha256:3cf6dce0aa06edd663176914069af83f19dcb90f3a9c401271acfa71872f8ce3"},
+]
+
+[package.dependencies]
+docopt = ">=0.4.0"
+Flask = ">=0.10.1"
+Markdown = ">=2.5.1"
+path-and-address = ">=2.0.1"
+Pygments = ">=1.6"
+requests = ">=2.4.1"
+Werkzeug = ">=0.7"
+
+[package.extras]
+tests = ["flake8 (>=3.0.0)", "pytest (>=4.4.1)", "responses (>=0.5.0)"]
 
 [[package]]
 name = "httplib2"
@@ -598,6 +653,17 @@ python-versions = "*"
 files = [
     {file = "ipaddress-1.0.23-py2.py3-none-any.whl", hash = "sha256:6e0f4a39e66cb5bb9a137b00276a2eff74f93b71dcbdad6f10ff7df9d3557fcc"},
     {file = "ipaddress-1.0.23.tar.gz", hash = "sha256:b7f8e0369580bb4a24d5ba1d7cc29660a4a6987763faf1d8a8046830e020e7e2"},
+]
+
+[[package]]
+name = "itsdangerous"
+version = "2.1.2"
+description = "Safely pass data to untrusted environments and back."
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "itsdangerous-2.1.2-py3-none-any.whl", hash = "sha256:2c2349112351b88699d8d4b6b075022c0808887cb7ad10069318a8b0bc88db44"},
+    {file = "itsdangerous-2.1.2.tar.gz", hash = "sha256:5dbbc68b317e5e42f327f9021763545dc3fc3bfe22e6deb96aaf1fc38874156a"},
 ]
 
 [[package]]
@@ -1013,6 +1079,16 @@ files = [
 ]
 
 [[package]]
+name = "path-and-address"
+version = "2.0.1"
+description = "Functions for server command-line arguments used by humans."
+optional = false
+python-versions = "*"
+files = [
+    {file = "path-and-address-2.0.1.zip", hash = "sha256:e96363d982b3a2de8531f4cd5f086b51d0248b58527227d43cf5014d045371b7"},
+]
+
+[[package]]
 name = "pillow"
 version = "9.5.0"
 description = "Python Imaging Library (Fork)"
@@ -1130,6 +1206,21 @@ files = [
     {file = "py-1.11.0-py2.py3-none-any.whl", hash = "sha256:607c53218732647dff4acdfcd50cb62615cedf612e72d1724fb1a0cc6405b378"},
     {file = "py-1.11.0.tar.gz", hash = "sha256:51c75c4126074b472f746a24399ad32f6053d1b34b68d2fa41e558e6f4a98719"},
 ]
+
+[[package]]
+name = "pygments"
+version = "2.17.2"
+description = "Pygments is a syntax highlighting package written in Python."
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "pygments-2.17.2-py3-none-any.whl", hash = "sha256:b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c"},
+    {file = "pygments-2.17.2.tar.gz", hash = "sha256:da46cec9fd2de5be3a8a784f434e4c4ab670b4ff54d605c4c2717e9d49c4c367"},
+]
+
+[package.extras]
+plugins = ["importlib-metadata"]
+windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
 name = "pyparsing"
@@ -1868,6 +1959,23 @@ python-dotenv = "*"
 requests = "*"
 
 [[package]]
+name = "werkzeug"
+version = "2.2.3"
+description = "The comprehensive WSGI web application library."
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "Werkzeug-2.2.3-py3-none-any.whl", hash = "sha256:56433961bc1f12533306c624f3be5e744389ac61d722175d543e1751285da612"},
+    {file = "Werkzeug-2.2.3.tar.gz", hash = "sha256:2e1ccc9417d4da358b9de6f174e3ac094391ea1d4fbef2d667865d819dfd0afe"},
+]
+
+[package.dependencies]
+MarkupSafe = ">=2.1.1"
+
+[package.extras]
+watchdog = ["watchdog"]
+
+[[package]]
 name = "wheel"
 version = "0.42.0"
 description = "A built-package format for Python"
@@ -1929,4 +2037,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7,<3.10"
-content-hash = "87cdabf0761281229cb346440b96e70bfbc3365cbe58e8ba3f97b9ad4f059e42"
+content-hash = "2fbdf468288f694f596c5bf441eb63053656c9001025ec9bc7e369faeed8a96c"
