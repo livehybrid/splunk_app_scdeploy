@@ -12,8 +12,8 @@ versioningit = "^2.1.0"
 
 #[tool.poetry.dev-dependencies]
 coverage = "*"
-crudini = "^0.9.3"
-docker-compose = "^1.29.2"
+crudini = "*"
+#docker-compose = "*"
 future = "*"
 lovely-pytest-docker = "*"
 mock = "*"
@@ -22,20 +22,21 @@ pytest-expect = "*"
 pytest-html = "*"
 pytest-ordering = "*"
 pytest-rerunfailures = "*"
-pytest-splunk-addon = "==1.9.2"
-pytest-splunk-addon-ui-smartx = "==2.0.6"
+pytest-splunk-addon = "*"
+pytest-splunk-addon-ui-smartx = "*"
 pytest-xdist = "*"
 requests = "*"
 reuse = "*"
 six = "*"
-splunk-add-on-ucc-framework = "*"
+splunk-add-on-ucc-framework = "5.35.1"
 # todo: remove the path reference when this installs in a virtualenv ok
 splunk-packaging-toolkit = {url = "https://github.com/NHSDigital/splunk-packaging-toolkit-whl/releases/download/v2021.09.26.10.44/splunk_packaging_toolkit-1.0.1-py3-none-any.whl"}
 splunk-sdk = "*"
 u-msgpack-python = "*"
 wheel = "*"
-splunk-appinspect = "^2.30.0"
-typing-extensions = "^4.4.0"
+splunk-appinspect = "*"
+typing-extensions = "*"
+attr = "^0.3.2"
 
 
 [tool.pytest.ini_options]

@@ -12,7 +12,7 @@ guard-%:
 	fi
 
 APP_ID:
- APP_ID:= $(shell poetry run crudini --get package/default/app.conf package id)
+ APP_ID:= $(shell basename $(PWD))
 
 list: help
 
@@ -112,7 +112,7 @@ build: ## Determine if UCC/Basic application and create app output
 build: clean-build APP_ID
 	@echo "building"
 	@# If it is a UCC app then use ucc-gen else run custom build code
-	[ -f ./globalConfig.json ] && poetry run ucc-gen --ta-version $(shell versioningit) || poetry run scripts/build.sh
+	[ -f ./globalConfig.json ] && poetry run ucc-gen --ta-version $(shell poetry run versioningit) -o output -v || poetry run scripts/build.sh
 	mv output/$(APP_ID) output/app
 	@echo "Fix to allow boto3 to be uploaded"
 	sed -i.bak -e '267,282d' output/app/lib/botocore/session.py
@@ -125,11 +125,8 @@ acsupload: ## Upload to Admin Config Service (ACS)
 	poetry run ./scripts/acscli_upload.sh
 
 dist: 
-	mv output/app output/$(APP_ID)
-	@echo "packaging"
 	mkdir -p tmp/reports
-	poetry run scripts/package.sh output
-	mv output/$(APP_ID) output/app
+	poetry run scripts/package.sh output/app
 
 splunk-ports:
 	@$(eval PORTSPLUNKWEB=$(shell poetry run docker-compose port splunk 8000 2>/dev/null | cut -d":" -f 2))

@@ -1,11 +1,13 @@
 version: "3.7"
 
 services:
-
   splunk:
     build:
       dockerfile: ./docker/splunk/Dockerfile
       context: ./
+      args:
+        - DOCKER_IMAGE=$DOCKER_IMAGE
+        - SPLUNK_VERSION=$SPLUNK_VERSION
     environment:
       - SPLUNK_START_ARGS=--accept-license
       - SPLUNK_PASSWORD=Chang3d!

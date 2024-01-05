@@ -1,257 +1,456 @@
 {
-    "pages": {
-        "configuration": {
-            "tabs": [
+  "pages": {
+    "configuration": {
+      "tabs": [
+        {
+          "name": "logging",
+          "entity": [
+            {
+              "required": true,
+              "defaultValue": "default",
+              "field": "index",
+              "options": {
+                "createSearchChoice": true,
+                "denyList": "^_.*$",
+                "endpointUrl": "data/indexes"
+              },
+              "validators": [
                 {
-                    "name": "logging",
-                    "entity": [
-                        {
-                            "type": "singleSelect",
-                            "label": "Log level",
-                            "options": {
-                                "disableSearch": true,
-                                "autoCompleteFields": [
-                                    {
-                                        "value": "DEBUG",
-                                        "label": "DEBUG"
-                                    },
-                                    {
-                                        "value": "INFO",
-                                        "label": "INFO"
-                                    },
-                                    {
-                                        "value": "WARNING",
-                                        "label": "WARNING"
-                                    },
-                                    {
-                                        "value": "ERROR",
-                                        "label": "ERROR"
-                                    },
-                                    {
-                                        "value": "CRITICAL",
-                                        "label": "CRITICAL"
-                                    }
-                                ]
-                            },
-                            "defaultValue": "INFO",
-                            "field": "loglevel"
-                        }
-                    ],
-                    "title": "Logging"
-                },
-                {
-                    "name": "dest_gitlab",
-                    "table": {
-                        "actions": [
-                            "edit",
-                            "delete",
-                            "clone"
-                        ],
-                        "header": [
-                            {
-                                "label": "Name",
-                                "field": "name"
-                            },
-                            {
-                                "label": "GitLab Server",
-                                "field": "hostname"
-                            },
-                            {
-                                "label": "Project ID",
-                                "field": "projectid"
-                            }
-                        ]
-                    },
-                    "entity": [
-                        {
-                            "type": "text",
-                            "label": "Name",
-                            "validators": [
-                                {
-                                    "type": "string",
-                                    "errorMsg": "Length of ID should be between 1 and 50",
-                                    "minLength": 1,
-                                    "maxLength": 50
-                                },
-                                {
-                                    "type": "regex",
-                                    "errorMsg": "Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
-                                    "pattern": "^[a-zA-Z]\\w*$"
-                                }
-                            ],
-                            "options": {
-                                "placeholder": "Required"
-                            },
-                            "field": "name",
-                            "help": "Enter a unique name for this destination.",
-                            "required": true
-                        },
-                        {
-                            "field": "help",
-                            "label": "",
-                            "type": "helpLink",
-                            "options": {
-                                "text": "GitLab.com Setup Help",
-                                "link": "https://docs.splunk.com/Documentation"
-                            }
-                        },
-                        {
-                            "type": "text",
-                            "label": "GitLab Server",
-                            "options": {
-                                "placeholder": "gitlab.com or gitlab.yourdomain.com"
-                            },
-                            "field": "hostname",
-                            "help": "gitlab.com or gitlab.yourdomain.com",
-                            "required": true
-                        },
-                        {
-                            "type": "text",
-                            "label": "GitLab Auth Token",
-                            "options": {
-                                "placeholder": "Token to access your GitLab account"
-                            },
-                            "encrypted": true,
-                            "field": "token",
-                            "help": "Get help at Gitlab.com",
-                            "required": true
-                        },
-                        {
-                            "type": "text",
-                            "label": "Project ID",
-                            "options": {
-                                "placeholder": "123"
-                            },
-                            "encrypted": false,
-                            "field": "projectid",
-                            "help": "Project ID to carry out actions against"
-                        }
-                    ],
-                    "title": "Destination - GitLab"
-                },
-                {
-                    "name": "dest_awssm",
-                    "table": {
-                        "actions": [
-                            "edit",
-                            "delete",
-                            "clone"
-                        ],
-                        "header": [
-                            {
-                                "label": "Name",
-                                "field": "name"
-                            },
-                            {
-                                "label": "IAM Role",
-                                "field": "iamrole"
-                            },
-                            {
-                                "label": "Secret Path",
-                                "field": "secretpath"
-                            }
-                        ]
-                    },
-                    "entity": [
-                        {
-                            "type": "text",
-                            "label": "Name",
-                            "validators": [
-                                {
-                                    "type": "string",
-                                    "errorMsg": "Length of ID should be between 1 and 50",
-                                    "minLength": 1,
-                                    "maxLength": 50
-                                },
-                                {
-                                    "type": "regex",
-                                    "errorMsg": "Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
-                                    "pattern": "^[a-zA-Z]\\w*$"
-                                }
-                            ],
-                            "options": {
-                                "placeholder": "Required"
-                            },
-                            "field": "name",
-                            "help": "Enter a unique name for this destination.",
-                            "required": true
-                        },
-                        {
-                            "field": "help",
-                            "label": "",
-                            "type": "helpLink",
-                            "options": {
-                                "text": "AWS Secret Manager Setup",
-                                "link": "https://docs.splunk.com/Documentation"
-                            }
-                        },
-                        {
-                            "type": "text",
-                            "label": "Region",
-                            "options": {
-                                "placeholder": "eu-west-2"
-                            },
-                            "field": "region",
-                            "help": "AWS Region",
-                            "defaultValue": "eu-west-2",
-                            "required": true
-                        },
-                        {
-                            "type": "text",
-                            "label": "IAM Role",
-                            "options": {
-                                "placeholder": "aws:arn::iam:1234567890:role/yourRole"
-                            },
-                            "field": "iamrole",
-                            "help": "Leave blank if no role required",
-                            "required": false,
-                            "encrypted": true
-                        },
-                        {
-                            "type": "text",
-                            "label": "AWS Access ID",
-                            "options": {
-                                "placeholder": "ABCDEFGHJKI"
-                            },
-                            "encrypted": false,
-                            "field": "aws_accessid",
-                            "help": "Generate an Access/Secret in AWS Console",
-                            "required": false
-                        },
-                        {
-                            "type": "text",
-                            "label": "AWS Secret Key",
-                            "options": {
-                                "placeholder": "********"
-                            },
-                            "encrypted": true,
-                            "field": "aws_secretkey",
-                            "help": "Generate an Access/Secret in AWS Console",
-                            "required": false
-                        },
-                        {
-                            "type": "text",
-                            "label": "Secret Path",
-                            "options": {
-                                "placeholder": "/splunkcloud/acstoken"
-                            },
-                            "encrypted": false,
-                            "field": "secretpath",
-                            "help": "Secret Path for AWS Secrets Manager"
-                        }
-                    ],
-                    "title": "Destination - AWS Secret Manager"
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "errorMsg": "Length of index name should be between 1 and 80.",
+                  "type": "string"
                 }
-            ],
-            "title": "Configuration",
-            "description": "Configure the Add-on"
+              ],
+              "label": "Index",
+              "type": "singleSelect"
+            },
+            {
+              "type": "singleSelect",
+              "label": "Log level",
+              "options": {
+                "disableSearch": true,
+                "autoCompleteFields": [
+                  {
+                    "value": "DEBUG",
+                    "label": "DEBUG"
+                  },
+                  {
+                    "value": "INFO",
+                    "label": "INFO"
+                  },
+                  {
+                    "value": "WARNING",
+                    "label": "WARNING"
+                  },
+                  {
+                    "value": "ERROR",
+                    "label": "ERROR"
+                  },
+                  {
+                    "value": "CRITICAL",
+                    "label": "CRITICAL"
+                  }
+                ]
+              },
+              "defaultValue": "INFO",
+              "field": "loglevel"
+            }
+          ],
+          "title": "Logging"
+        },
+        {
+          "name": "dest_gitlab",
+          "table": {
+            "actions": ["edit", "delete", "clone"],
+            "header": [
+              {
+                "label": "Name",
+                "field": "name"
+              },
+              {
+                "label": "GitLab Server",
+                "field": "hostname"
+              },
+              {
+                "label": "Project ID",
+                "field": "projectid"
+              },
+              {
+                "label": "Target User",
+                "field": "user"
+              }
+            ]
+          },
+          "entity": [
+            {
+              "type": "text",
+              "label": "Name",
+              "validators": [
+                {
+                  "type": "string",
+                  "errorMsg": "Length of ID should be between 1 and 50",
+                  "minLength": 1,
+                  "maxLength": 50
+                },
+                {
+                  "type": "regex",
+                  "errorMsg": "Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                  "pattern": "^[a-zA-Z]\\w*$"
+                }
+              ],
+              "field": "name",
+              "help": "Enter a unique name for this destination.",
+              "required": true
+            },
+            {
+              "field": "help",
+              "label": "",
+              "type": "helpLink",
+              "options": {
+                "text": "GitLab.com Setup Help",
+                "link": "https://docs.splunk.com/Documentation"
+              }
+            },
+            {
+              "type": "text",
+              "label": "GitLab Server",
+              "field": "hostname",
+              "help": "gitlab.com or gitlab.yourdomain.com",
+              "required": true
+            },
+            {
+              "type": "text",
+              "label": "GitLab Auth Token",
+              "encrypted": true,
+              "field": "token",
+              "help": "Token to access your GitLab account",
+              "required": true
+            },
+            {
+              "type": "text",
+              "label": "Project ID",
+              "encrypted": false,
+              "field": "projectid",
+              "help": "Project ID to carry out actions against"
+            },
+            {
+              "required": false,
+              "defaultValue": "",
+              "field": "user",
+              "options": {
+                "createSearchChoice": true,
+                "endpointUrl": "admin/users"
+              },
+              "validators": [
+                {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "errorMsg": "Length of index name should be between 1 and 80.",
+                  "type": "string"
+                }
+              ],
+              "label": "Target User",
+              "type": "singleSelect"
+            },
+            {
+              "type": "multipleSelect",
+              "label": "Limited to role(s)",
+              "validators": [
+                {
+                  "type": "string",
+                  "errorMsg": "Length of index name should be between 1 to 80 characters.",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              ],
+              "defaultValue": "sc_admin",
+              "options": {
+                "delimiter": "|",
+                "endpointUrl": "authorization/roles",
+                "createSearchChoice": true
+              },
+              "field": "limit_role",
+              "required": true
+            }
+          ],
+          "title": "Destination - GitLab"
+        },
+        {
+          "name": "dest_github",
+          "table": {
+            "actions": ["edit", "delete", "clone"],
+            "header": [
+              {
+                "label": "Name",
+                "field": "name"
+              },
+              {
+                "label": "GitHub Repo path",
+                "field": "repo"
+              },
+              {
+                "label": "Target User",
+                "field": "user"
+              }
+            ]
+          },
+          "entity": [
+            {
+              "type": "text",
+              "label": "Name",
+              "validators": [
+                {
+                  "type": "string",
+                  "errorMsg": "Length of ID should be between 1 and 50",
+                  "minLength": 1,
+                  "maxLength": 50
+                },
+                {
+                  "type": "regex",
+                  "errorMsg": "Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                  "pattern": "^[a-zA-Z]\\w*$"
+                }
+              ],
+              "field": "name",
+              "help": "Enter a unique name for this destination.",
+              "required": true
+            },
+            {
+              "field": "help",
+              "label": "",
+              "type": "helpLink",
+              "options": {
+                "text": "GitHub.com Setup Help",
+                "link": "https://docs.splunk.com/Documentation"
+              }
+            },
+            {
+              "type": "text",
+              "label": "GitHub Repo",
+              "field": "repo",
+              "help": "e.g. livehybrid/TA-tesla-data",
+              "required": true
+            },
+            {
+              "type": "text",
+              "label": "Secret Name",
+              "field": "secret_name",
+              "help": "e.g. SPLUNK_TOKEN",
+              "required": true
+            },
+            {
+              "type": "text",
+              "label": "GitHub Auth Token",
+              "encrypted": true,
+              "field": "token",
+              "help": "Token to access your GitHub account",
+              "required": true
+            },
+            {
+              "required": false,
+              "defaultValue": "",
+              "field": "user",
+              "options": {
+                "createSearchChoice": true,
+                "endpointUrl": "admin/users"
+              },
+              "validators": [
+                {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "errorMsg": "Length of index name should be between 1 and 80.",
+                  "type": "string"
+                }
+              ],
+              "label": "Target User",
+              "type": "singleSelect"
+            },
+            {
+              "type": "multipleSelect",
+              "label": "Limited to role(s)",
+              "validators": [
+                {
+                  "type": "string",
+                  "errorMsg": "Length of index name should be between 1 to 80 characters.",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              ],
+              "defaultValue": "sc_admin",
+              "options": {
+                "delimiter": "|",
+                "endpointUrl": "authorization/roles",
+                "createSearchChoice": true
+              },
+              "field": "limit_role",
+              "required": true
+            }
+          ],
+          "title": "Destination - GitHub"
+        },
+        {
+          "name": "dest_awssm",
+          "table": {
+            "actions": ["edit", "delete", "clone"],
+            "header": [
+              {
+                "label": "Name",
+                "field": "name"
+              },
+              {
+                "label": "IAM Role",
+                "field": "iamrole"
+              },
+              {
+                "label": "Secret Path",
+                "field": "secretpath"
+              },
+              {
+                "label": "Target User",
+                "field": "user"
+              }
+            ]
+          },
+          "entity": [
+            {
+              "type": "text",
+              "label": "Name",
+              "validators": [
+                {
+                  "type": "string",
+                  "errorMsg": "Length of ID should be between 1 and 50",
+                  "minLength": 1,
+                  "maxLength": 50
+                },
+                {
+                  "type": "regex",
+                  "errorMsg": "Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                  "pattern": "^[a-zA-Z]\\w*$"
+                }
+              ],
+              "field": "name",
+              "help": "Enter a unique name for this destination.",
+              "required": true
+            },
+            {
+              "field": "help",
+              "label": "",
+              "type": "helpLink",
+              "options": {
+                "text": "AWS Secret Manager Setup",
+                "link": "https://docs.splunk.com/Documentation"
+              }
+            },
+            {
+              "type": "text",
+              "label": "Region",
+              "field": "region",
+              "help": "AWS Region",
+              "defaultValue": "eu-west-2",
+              "required": true
+            },
+            {
+              "type": "text",
+              "label": "IAM Role",
+              "field": "iamrole",
+              "help": "e.g. aws:arn::iam:1234567890:role/yourRole - Leave blank if no role required",
+              "required": false,
+              "encrypted": true
+            },
+            {
+              "type": "text",
+              "label": "AWS Access ID",
+              "encrypted": false,
+              "field": "aws_accessid",
+              "help": "Generate an Access/Secret in AWS Console",
+              "required": false
+            },
+            {
+              "type": "text",
+              "label": "AWS Secret Key",
+              "encrypted": true,
+              "field": "aws_secretkey",
+              "help": "Generate an Access/Secret in AWS Console",
+              "required": false
+            },
+            {
+              "type": "text",
+              "label": "Secret Path",
+              "encrypted": false,
+              "field": "secretpath",
+              "help": "Secret Path for AWS Secrets Manager"
+            },
+            {
+              "required": false,
+              "defaultValue": "",
+              "field": "user",
+              "options": {
+                "createSearchChoice": true,
+                "endpointUrl": "admin/users"
+              },
+              "validators": [
+                {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "errorMsg": "Length of index name should be between 1 and 80.",
+                  "type": "string"
+                }
+              ],
+              "label": "Target User",
+              "type": "singleSelect"
+            },
+            {
+              "type": "multipleSelect",
+              "label": "Limited to role(s)",
+              "validators": [
+                {
+                  "type": "string",
+                  "errorMsg": "Length of index name should be between 1 to 80 characters.",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              ],
+              "defaultValue": "sc_admin",
+              "options": {
+                "delimiter": "|",
+                "endpointUrl": "authorization/roles",
+                "createSearchChoice": true
+              },
+              "field": "limit_role",
+              "required": true
+            }
+          ],
+          "title": "Destination - AWS Secret Manager"
         }
-    },
-    "meta": {
-        "name": "splunk_app_scdeploy",
-        "restRoot": "splunk_app_scdeploy",
-        "version": "1.2.0",
-        "displayName": "SplunkCloud Deployment Manager",
-        "schemaVersion": "0.0.3"
+      ],
+      "title": "Configuration",
+      "description": "Configure the Add-on"
     }
+  },
+  "meta": {
+    "name": "splunk_app_scdeploy",
+    "restRoot": "splunk_app_scdeploy",
+    "version": "1.2.5+dirty",
+    "displayName": "SplunkCloud Deployment Manager",
+    "schemaVersion": "0.0.3",
+    "os-dependentLibraries": [
+      {
+        "name": "cffi",
+        "version": "1.15.1",
+        "os": "linux",
+        "target": "3rdparty/linux",
+        "python_version": "37",
+        "platform": "manylinux2014_x86_64"
+      },
+      {
+        "name": "pynacl",
+        "version": "1.5.0",
+        "os": "linux",
+        "target": "3rdparty/linux",
+        "python_version": "37",
+        "platform": "manylinux2014_x86_64"
+      }
+    ]
+  }
 }

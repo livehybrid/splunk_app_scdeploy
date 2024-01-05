@@ -4,5 +4,4 @@ pytest-splunk-addon-data.conf
 samples
 local
 metadata/local.meta
-
-
+**/*.pyc

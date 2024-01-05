@@ -7,3 +7,5 @@ poetry.lock
 package/local/
 tmp/
 __pycache__/
+helmut.log
+pytest_splunk_addon.log

@@ -1,5 +1,6 @@
 ARG SPLUNK_VERSION=latest
-FROM splunk/splunk:$SPLUNK_VERSION
+ARG DOCKER_IMAGE=splunk/splunk
+FROM $DOCKER_IMAGE:$SPLUNK_VERSION
 
 COPY docker/splunk/server.conf /opt/splunk/etc/system/local/server.conf
 COPY docker/splunk/ui-prefs.conf /opt/splunk/etc/system/local/ui-prefs.conf
