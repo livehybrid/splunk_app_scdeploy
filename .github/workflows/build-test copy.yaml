@@ -21,7 +21,7 @@ jobs:
           architecture: "x64"
       - name: "Setup Environment"
         run: |
-          poetry install
+          poetry install --no-root
           poetry shell
 
       - name: Generate Documentation
