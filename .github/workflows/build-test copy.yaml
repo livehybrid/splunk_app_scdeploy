@@ -37,6 +37,7 @@ jobs:
           echo "Fix to allow boto3 to be uploaded"
           sed -i.bak -e '267,282d' output/app/lib/botocore/session.py
           rm -f output/app/lib/botocore/session.py.bak
+          rm -rf **/*.pyc
 
       - name: Generating package
         run: make dist
@@ -48,17 +49,11 @@ jobs:
           mkdir -p reports
           poetry run splunk-appinspect inspect $PACKAGE --mode=precert --included-tags=private_victoria --data-format junitxml --output-file reports/$PACKAGE_ID-appinspect-cli.xml
 
-      - name: Upload Splunkbase package artifact
+      - name: Upload package artifact
         uses: actions/upload-artifact@v2
         with:
           name: splunkbase-package
-          path: build/package/splunkbase
-
-      - name: Upload Deployment package artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: deployment-package
-          path: build/package/deployment
+          path: dist/
 
       - name: Upload Reports
         uses: actions/upload-artifact@v2
