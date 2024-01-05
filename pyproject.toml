@@ -38,6 +38,7 @@ splunk-appinspect = "*"
 typing-extensions = "*"
 attr = "^0.3.2"
 grip = "^4.6.2"
+pandoc = "^2.3"
 
 
 [tool.pytest.ini_options]
