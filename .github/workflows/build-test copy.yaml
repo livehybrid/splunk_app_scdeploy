@@ -1,0 +1,94 @@
+name: Splunk App CI/CD 2
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*.*.*"
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    container: livehybrid/splunk-ci-build:latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Environment
+        run: |
+          pip install -r requirements.txt
+          rm -rf build/
+
+      - name: Generate Documentation
+        run: |
+          cat README.md | sed 's/package\/appserver/appserver/g' > package/README.md
+          grip README.md --export README.html --title ""
+          pandoc -s README.html -o package/README.pdf
+
+      - name: Generate Addon
+        run: |
+          echo "Version is now calculated by ucc-gen"
+          ucc-gen build
+
+      - name: Generating package
+        run: |
+          PACKAGE_ID=$(ls output/)
+          BUILD_DIR=output/$PACKAGE_ID              
+          mkdir -p build/package/splunkbase
+          mkdir -p build/package/deployment
+          slim package -o build/package/splunkbase $BUILD_DIR 
+          mkdir -p build/package/deployment
+          PACKAGE=$(ls build/package/splunkbase/*)
+          slim partition $PACKAGE -o build/package/deployment/ || true
+          slim validate $PACKAGE
+
+      - name: Inspect package
+        run: |
+          PACKAGE_ID=$(ls output/)
+          PACKAGE=$(ls build/package/splunkbase/*)
+          mkdir -p reports
+          splunk-appinspect inspect $PACKAGE --mode=precert --included-tags=private_victoria --data-format junitxml --output-file reports/$PACKAGE_ID-appinspect-cli.xml
+
+      - name: Upload Splunkbase package artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: splunkbase-package
+          path: build/package/splunkbase
+
+      - name: Upload Deployment package artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: deployment-package
+          path: build/package/deployment
+
+      - name: Upload Reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: reports
+          path: reports
+
+  publish-gh:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    container: cimg/go:1.19
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+        with:
+          path: /tmp/workspace
+
+      - name: "Publish on GitHub"
+        run: |
+          go install github.com/tcnksm/ghr@latest
+          ISPRE=""
+          [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]*.[0-9]*.[0-9]*$ ]] || ISPRE="-prerelease"
+          $HOME/go/bin/ghr -t ${GH_TOKEN} -u ${GITHUB_REPOSITORY_OWNER} -r $(basename ${GITHUB_REPOSITORY}) -c ${GITHUB_SHA} ${ISPRE} -delete "${GITHUB_REF_NAME}" /tmp/workspace/splunkbase-package
+          $HOME/go/bin/ghr -t ${GH_TOKEN} -u ${GITHUB_REPOSITORY_OWNER} -r $(basename ${GITHUB_REPOSITORY}) -c ${GITHUB_SHA} ${ISPRE} "${GITHUB_REF_NAME}" /tmp/workspace/deployment-package
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
