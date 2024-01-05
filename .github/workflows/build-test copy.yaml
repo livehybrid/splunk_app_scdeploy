@@ -27,7 +27,7 @@ jobs:
         run: |
           cat README.md | sed 's/package\/appserver/appserver/g' > package/README.md
           poetry run grip README.md --export README.html --title ""
-          poetry run pandoc -s README.html -o package/README.pdf
+          #poetry run pandoc -s README.html -o package/README.pdf
 
       - name: Generate Addon
         run: |
