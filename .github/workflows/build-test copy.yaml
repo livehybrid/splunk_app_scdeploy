@@ -32,15 +32,19 @@ jobs:
       - name: Generate Addon
         run: |
           echo "Version is now calculated by ucc-gen"
-          poetry run ucc-gen build
+          [ -f ./globalConfig.json ] && poetry run ucc-gen -o output -v || poetry run scripts/build.sh
+          mv output/$(basename $(pwd)) output/app
+          echo "Fix to allow boto3 to be uploaded"
+          sed -i.bak -e '267,282d' output/app/lib/botocore/session.py
+          rm -f output/app/lib/botocore/session.py.bak
 
       - name: Generating package
         run: make dist
 
       - name: Inspect package
         run: |
-          PACKAGE_ID=$(ls output/)
-          PACKAGE=$(ls build/package/splunkbase/*)
+          PACKAGE_ID=$(basename $(pwd))
+          PACKAGE=$(ls dist/*)
           mkdir -p reports
           poetry run splunk-appinspect inspect $PACKAGE --mode=precert --included-tags=private_victoria --data-format junitxml --output-file reports/$PACKAGE_ID-appinspect-cli.xml
 
