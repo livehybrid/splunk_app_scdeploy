@@ -22,37 +22,27 @@ jobs:
       - name: "Setup Environment"
         run: |
           poetry install --no-root
-          poetry shell
 
       - name: Generate Documentation
         run: |
           cat README.md | sed 's/package\/appserver/appserver/g' > package/README.md
-          grip README.md --export README.html --title ""
-          pandoc -s README.html -o package/README.pdf
+          poetry run grip README.md --export README.html --title ""
+          poetry run pandoc -s README.html -o package/README.pdf
 
       - name: Generate Addon
         run: |
           echo "Version is now calculated by ucc-gen"
-          ucc-gen build
+          poetry run ucc-gen build
 
       - name: Generating package
-        run: |
-          PACKAGE_ID=$(ls output/)
-          BUILD_DIR=output/$PACKAGE_ID              
-          mkdir -p build/package/splunkbase
-          mkdir -p build/package/deployment
-          slim package -o build/package/splunkbase $BUILD_DIR 
-          mkdir -p build/package/deployment
-          PACKAGE=$(ls build/package/splunkbase/*)
-          slim partition $PACKAGE -o build/package/deployment/ || true
-          slim validate $PACKAGE
+        run: make dist
 
       - name: Inspect package
         run: |
           PACKAGE_ID=$(ls output/)
           PACKAGE=$(ls build/package/splunkbase/*)
           mkdir -p reports
-          splunk-appinspect inspect $PACKAGE --mode=precert --included-tags=private_victoria --data-format junitxml --output-file reports/$PACKAGE_ID-appinspect-cli.xml
+          poetry run splunk-appinspect inspect $PACKAGE --mode=precert --included-tags=private_victoria --data-format junitxml --output-file reports/$PACKAGE_ID-appinspect-cli.xml
 
       - name: Upload Splunkbase package artifact
         uses: actions/upload-artifact@v2
