@@ -45,7 +45,9 @@ jobs:
 
       - name: Generating package
         run: |
-          rm -rf output/app/lib/3rdparty/**/*.pyc
+          set -x
+          rm -rf output/app/lib/3rdparty/**/*.pyc || true
+          rm -rf output/app/lib/__pycache__ || true
           make dist
 
       - name: Local Inspect package
