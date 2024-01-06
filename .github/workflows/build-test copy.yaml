@@ -67,7 +67,7 @@ jobs:
           username: ${{ secrets.SPLUNKBASE_USERNAME }}
           password: ${{ secrets.SPLUNKBASE_PASSWORD }}
           app_path: dist
-          included_tags: "cloud,private_victoria"
+          included_tags: "private_victoria"
           excluded_tags: "offensive"
 
       - name: Upload package artifact
