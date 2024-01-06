@@ -66,6 +66,7 @@ jobs:
         with:
           username: ${{ secrets.SPLUNKBASE_USERNAME }}
           password: ${{ secrets.SPLUNKBASE_PASSWORD }}
+          app_path: dist
           included_tags: "cloud,private_victoria"
           excluded_tags: "offensive"
 
