@@ -42,12 +42,27 @@ jobs:
       - name: Generating package
         run: make dist
 
-      - name: Inspect package
+      - name: Local Inspect package
         run: |
           PACKAGE_ID=$(basename $(pwd))
           PACKAGE=$(ls dist/*)
           mkdir -p reports
           poetry run splunk-appinspect inspect $PACKAGE --mode=precert --included-tags=private_victoria --data-format junitxml --output-file reports/$PACKAGE_ID-appinspect-cli.xml
+
+      # - name: Run App Inspect CLI
+      #   uses: splunk/appinspect-cli-action@v1.5
+      #   with:
+      #     app_path: $PACKAGE
+      #     included_tags: cloud, splunk_appinspect
+
+      - uses: splunk/appinspect-api-action@v3.0
+        name: "AppInspect API"
+        with:
+          username: ${{ secrets.SPLUNKBASE_USERNAME }}
+          password: ${{ secrets.SPLUNKBASE_PASSWORD }}
+          app_path: $PACKAGE
+          included_tags: "cloud,private_victoria"
+          excluded_tags: "offensive"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
