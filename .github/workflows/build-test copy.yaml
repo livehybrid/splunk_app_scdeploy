@@ -39,13 +39,13 @@ jobs:
           rm -f output/app/lib/botocore/session.py.bak
           set -x
           ls *
-          rm -rf output/app/lib/3rdparty/lib/**/*.pyc
+          rm -rf output/app/lib/3rdparty/**/*.pyc
           rm -rf output/app/lib/3rdparty/linux/nacl/__pycache__/*
           rm -rf output/app/lib/3rdparty/linux/cffi/__pycache__/*
 
       - name: Generating package
         run: |
-          rm -rf output/app/lib/3rdparty/lib/**/*.pyc
+          rm -rf output/app/lib/3rdparty/**/*.pyc
           make dist
 
       - name: Local Inspect package
