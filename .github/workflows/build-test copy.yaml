@@ -37,7 +37,7 @@ jobs:
           echo "Fix to allow boto3 to be uploaded"
           sed -i.bak -e '267,282d' output/app/lib/botocore/session.py
           rm -f output/app/lib/botocore/session.py.bak
-          rm -rf **/*.pyc
+          rm -rf output/app/lib/**/*.pyc
 
       - name: Generating package
         run: make dist
