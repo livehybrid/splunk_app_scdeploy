@@ -39,6 +39,8 @@ jobs:
           rm -f output/app/lib/botocore/session.py.bak
           set -x
           rm -rf output/app/lib/3rdparty/lib/**/*.pyc
+          rm -rf output/app/lib/3rdparty/linux/nacl/__pycache__/*
+          rm -rf output/app/lib/3rdparty/linux/cffi/__pycache__/*
 
       - name: Generating package
         run: make dist
@@ -61,7 +63,7 @@ jobs:
         with:
           username: ${{ secrets.SPLUNKBASE_USERNAME }}
           password: ${{ secrets.SPLUNKBASE_PASSWORD }}
-          app_path: output/app
+          app_path: dist/$(ls dist/*)
           included_tags: "cloud,private_victoria"
           excluded_tags: "offensive"
 
