@@ -48,7 +48,7 @@ jobs:
           set -x
           rm -rf output/app/lib/3rdparty/**/*.pyc || true
           rm -rf output/app/lib/__pycache__ || true
-          make dist
+          poetry run scripts/package.sh output/app
 
       - name: Local Inspect package
         run: |
@@ -75,7 +75,7 @@ jobs:
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: splunkbase-package
+          name: dist
           path: dist/
 
       - name: Upload Reports
@@ -98,7 +98,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
+          path: .
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "dist/*"
