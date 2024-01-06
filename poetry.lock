@@ -1846,23 +1846,27 @@ name = "splunk-add-on-ucc-framework"
 version = "5.35.1"
 description = "Splunk Add-on SDK formerly UCC is a build and code generation framework"
 optional = false
-python-versions = ">=3.7,<4.0"
-files = [
-    {file = "splunk_add_on_ucc_framework-5.35.1-py3-none-any.whl", hash = "sha256:bb625a95ab1451201aeb3592b36e17ecb2c22bc871f6ae92d2940120e8eb9c98"},
-    {file = "splunk_add_on_ucc_framework-5.35.1.tar.gz", hash = "sha256:a7590312296b514484ec53a443dc9779a7ce931a52a4d2f37250345a364e677c"},
-]
+python-versions = "^3.7"
+files = []
+develop = false
 
 [package.dependencies]
-addonfactory-splunk-conf-parser-lib = ">=0.3.3,<0.4.0"
-colorama = ">=0.4.6,<0.5.0"
-defusedxml = ">=0.7.1,<0.8.0"
-dunamai = ">=1.9.0,<2.0.0"
+addonfactory-splunk-conf-parser-lib = "*"
+colorama = "^0.4.6"
+defusedxml = "^0.7.1"
+dunamai = "^1.9.0"
 jinja2 = ">=2,<4"
-jsonschema = ">=4.4.0,<5.0.0"
-openapi3 = ">=1.7.0,<2.0.0"
-PyYAML = ">=6.0,<7.0"
-requests = ">=2.31.0,<3.0.0"
+jsonschema = "^4.4.0"
+openapi3 = "^1.7.0"
+PyYAML = "^6.0"
+requests = "^2.31.0"
 urllib3 = "<2"
+
+[package.source]
+type = "git"
+url = "https://github.com/livehybrid/addonfactory-ucc-generator.git"
+reference = "ws-add-no-conflict"
+resolved_reference = "e87a7563f481eb2ef32875f42ac3445b6359c281"
 
 [[package]]
 name = "splunk-appinspect"
@@ -2104,4 +2108,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7,<3.10"
-content-hash = "21e082a5495517d0d2f9178142d92d7051063a1e03f4242cb41b40b85796f00c"
+content-hash = "a422fed7d1b108c10cd1323355cdf44acfc0e1d06ddae9615208ef819c94c66d"
