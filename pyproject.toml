@@ -31,7 +31,7 @@ six = "*"
 splunk-add-on-ucc-framework = "5.36.0"
 # todo: remove the path reference when this installs in a virtualenv ok
 splunk-packaging-toolkit = {url = "https://github.com/NHSDigital/splunk-packaging-toolkit-whl/releases/download/v2021.09.26.10.44/splunk_packaging_toolkit-1.0.1-py3-none-any.whl"}
-splunk-sdk = "1.6.2"
+splunk-sdk = "1.7.3"
 u-msgpack-python = "*"
 wheel = "*"
 splunk-appinspect = "3.1.0"
