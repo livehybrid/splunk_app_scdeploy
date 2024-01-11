@@ -260,8 +260,6 @@ class GenerateSplunkToken(GeneratingCommand):
                     }
                 )
 
-            yield tokenResponse
-
             if self.destination_type == "gitlab":
                 gitlab_hostname = remote_config["hostname"]
                 gitlab_projectid = remote_config["projectid"]
