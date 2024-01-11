@@ -34,7 +34,7 @@ from botocore.exceptions import ClientError
 from splunklib.binding import HTTPError as SplunkHTTPError
 from base64 import b64encode
 
-# from nacl import encoding, public
+from nacl import encoding, public
 
 splunkhome = os.environ["SPLUNK_HOME"]
 APP_NAME = scu.get_appname_from_path(__file__)
