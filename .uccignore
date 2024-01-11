@@ -5,3 +5,4 @@ samples
 local
 metadata/local.meta
 **/*.pyc
+**/__pycache__

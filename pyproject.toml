@@ -6,7 +6,7 @@ authors = ["Will Searle <will@splunk.engineer>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.7,<3.10"
+python = "^3.7,<3.8"
 cached-property = "^1.5.2"
 versioningit = "^2.1.0"
 
@@ -28,7 +28,7 @@ pytest-xdist = "*"
 requests = "*"
 reuse = "*"
 six = "*"
-splunk-add-on-ucc-framework = {git = "https://github.com/livehybrid/addonfactory-ucc-generator.git", rev = "ws-add-no-conflict"}
+splunk-add-on-ucc-framework = {git = "https://github.com/livehybrid/addonfactory-ucc-generator.git", rev = "ws-uccignore-improvements"}
 # todo: remove the path reference when this installs in a virtualenv ok
 splunk-packaging-toolkit = {url = "https://github.com/NHSDigital/splunk-packaging-toolkit-whl/releases/download/v2021.09.26.10.44/splunk_packaging_toolkit-1.0.1-py3-none-any.whl"}
 splunk-sdk = "*"
