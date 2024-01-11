@@ -12,7 +12,7 @@ versioningit = "^2.1.0"
 
 #[tool.poetry.dev-dependencies]
 coverage = "*"
-crudini = "*"
+crudini = "0.9.5"
 #docker-compose = "*"
 future = "*"
 lovely-pytest-docker = "*"
@@ -28,13 +28,13 @@ pytest-xdist = "*"
 requests = "*"
 reuse = "*"
 six = "*"
-splunk-add-on-ucc-framework = {git = "https://github.com/livehybrid/addonfactory-ucc-generator.git", rev = "ws-uccignore-improvements"}
+splunk-add-on-ucc-framework = "5.36.0"
 # todo: remove the path reference when this installs in a virtualenv ok
 splunk-packaging-toolkit = {url = "https://github.com/NHSDigital/splunk-packaging-toolkit-whl/releases/download/v2021.09.26.10.44/splunk_packaging_toolkit-1.0.1-py3-none-any.whl"}
-splunk-sdk = "*"
+splunk-sdk = "1.6.2"
 u-msgpack-python = "*"
 wheel = "*"
-splunk-appinspect = "*"
+splunk-appinspect = "3.1.0"
 typing-extensions = "*"
 attr = "^0.3.2"
 grip = "^4.6.2"
