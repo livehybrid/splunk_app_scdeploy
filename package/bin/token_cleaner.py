@@ -85,7 +85,7 @@ class TOKEN_CLEANER(BaseModInput):
             for token in tokens:
                 token_expiry = int(token['content']['claims']['exp'])
                 # Check if the token expired longer ago than the current time minus expiry_offset
-                if token_expiry < (time_now - expiry_offset):
+                if token_expiry < (time_now - int(expiry_offset)):
                     removed_tokens = removed_tokens+1
                     # Token is expired, delete it
                     token_name = token['name']
@@ -101,6 +101,7 @@ class TOKEN_CLEANER(BaseModInput):
 
             self.log_info(f"Removed {removed_tokens} on this iteration")
         except Exception as e:
+            self.log_critical(sys.exc_info()[2])
             ew.log("ERROR", f"Error deleting expired tokens: {str(e)}")
 
 
