@@ -71,7 +71,7 @@ splunk-restart: ## Restart the splunk process in the current running splunk dock
 	docker-compose exec splunk /bin/sh -c 'sudo /opt/splunk/bin/splunk restart'
 
 install: ## Run repo installation (Poetry install)
-	poetry install
+	poetry install --no-root
 
 update: ## Update poetry as per local config
 	poetry update
@@ -88,12 +88,13 @@ docker-build: APP_ID
 		--pull
 
 down: ## Shutdown and remove docker containers assosicated with this app/repo
+down: APP_ID
 	poetry run docker-compose down --remove-orphans
 
 up: ## Start docker containers associated with this app/folder as defined in docker-compose.yml
 up: APP_ID
 	APP_ID=${APP_ID} poetry run docker-compose -f docker-compose.yml -f docker-compose.local.yml up -d
-	poetry run scripts/wait-for-log-line.sh splunk 'Ansible playbook complete'
+	APP_ID=${APP_ID} poetry run scripts/wait-for-log-line.sh splunk 'Ansible playbook complete'
 
 up-ci: APP_ID
 up-ci: ## Start docker containers (CI Only)
@@ -114,9 +115,9 @@ build: clean-build APP_ID
 	@# If it is a UCC app then use ucc-gen else run custom build code
 	[ -f ./globalConfig.json ] && poetry run ucc-gen --ta-version $(shell poetry run versioningit) -o output -v || poetry run scripts/build.sh
 	mv output/$(APP_ID) output/app
-	@echo "Fix to allow boto3 to be uploaded"
-	sed -i.bak -e '267,282d' output/app/lib/botocore/session.py
-	rm -f output/app/lib/botocore/session.py.bak
+#	@echo "Fix to allow boto3 to be uploaded"
+#	sed -i.bak -e '267,282d' output/app/lib/botocore/session.py
+#	rm -f output/app/lib/botocore/session.py.bak
 
 release: ## Create application release
 release: dist APP_ID
