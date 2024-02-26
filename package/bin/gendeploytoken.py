@@ -196,7 +196,6 @@ class GenerateSplunkToken(GeneratingCommand):
         if self.service:
             try:
                 conf_file = f"{APP_NAME}_settings"
-                self.logger.warning(conf_file)
                 confs = self.service.confs[str(conf_file)]
                 for stanza in confs:
                     if stanza.name == "logging":
@@ -383,7 +382,7 @@ class GenerateSplunkToken(GeneratingCommand):
                         "SecretString": tokenResponse["token"],
                     }
                     response = secretsmanager_client.put_secret_value(**kwargs)
-                    log_line = f"Value put in secret {secret_name}."
+                    log_line = f"Token put into secret={secret_name} for requested_user={self.requested_user}."
                     self.logger.info(log_line)
                     tokenResponse["message"] = log_line
                     tokenResponse["token"] = "[REDACTED]"
