@@ -5,6 +5,6 @@ updates:
     schedule:
       interval: "daily"
   - package-ecosystem: "pip"
-    directory: "/package" # Location of package manifests
+    directory: "/package/lib" # Location of package manifests
     schedule:
       interval: "daily"
