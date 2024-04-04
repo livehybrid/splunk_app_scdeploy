@@ -83,7 +83,7 @@ class GenerateSplunkToken(GeneratingCommand):
         default="cicd",
     )  # validate=validators.Match("source_field", r"^.*$")
 
-    requested_user = Option(
+    user = Option(
         doc="""
             **Syntax:** **user=admin** **
             **Description:** for which user to generate a token for, if not specified in config""",
@@ -243,7 +243,6 @@ class GenerateSplunkToken(GeneratingCommand):
                 f"Generating token for user={self.user} based on destination configuration"
             )
         else:
-            self.user = self.requested_user
             self.logger.info(
                 f"Generating token for user={self.user} based on SPL command"
             )
