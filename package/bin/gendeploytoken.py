@@ -237,7 +237,7 @@ class GenerateSplunkToken(GeneratingCommand):
             )
             yield {"error": "Unauthorised to run"}
             return
-        if "user" in remote_config and remote_config.get("user") != "":
+        if "user" in remote_config and remote_config.get("user") != "" and remote_config.get("user") is not None:
             self.user = remote_config.get("user", "Unknown Error")
             self.logger.info(
                 f"Generating token for user={self.user} based on destination configuration"
