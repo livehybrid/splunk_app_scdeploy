@@ -368,6 +368,20 @@ files = [
 ]
 
 [[package]]
+name = "deprecation"
+version = "2.1.0"
+description = "A library to handle automated deprecations"
+optional = false
+python-versions = "*"
+files = [
+    {file = "deprecation-2.1.0-py2.py3-none-any.whl", hash = "sha256:a10811591210e1fb0e768a8c25517cabeabcba6f0bf96564f8ff45189f90b14a"},
+    {file = "deprecation-2.1.0.tar.gz", hash = "sha256:72b3bde64e5d778694b0cf68178aed03d15e15477116add3fb773e581f9518ff"},
+]
+
+[package.dependencies]
+packaging = "*"
+
+[[package]]
 name = "docopt"
 version = "0.6.2"
 description = "Pythonic argument parser, that will make you smile"
@@ -1024,24 +1038,6 @@ files = [
 
 [package.dependencies]
 selenium = "3.141"
-
-[[package]]
-name = "openapi3"
-version = "1.8.2"
-description = "Client and Validator of OpenAPI 3 Specifications"
-optional = false
-python-versions = "*"
-files = [
-    {file = "openapi3-1.8.2-py2.py3-none-any.whl", hash = "sha256:0d8fd34f304b61bc64b1f48ed6c6dbcc03ca04a29bcfa84e40ec5d87648e4399"},
-    {file = "openapi3-1.8.2.tar.gz", hash = "sha256:a21a490573d89ca69ada7cbe585adb2fca4964257f6f3a1df531f12815455d2c"},
-]
-
-[package.dependencies]
-PyYaml = "*"
-requests = "*"
-
-[package.extras]
-test = ["fastapi (==0.76.0)", "hypercorn (==0.14.3)", "pydantic (==1.10.2)", "pytest", "pytest-asyncio (==0.16)", "uvloop (==0.17.0)"]
 
 [[package]]
 name = "packaging"
@@ -1844,13 +1840,13 @@ files = [
 
 [[package]]
 name = "splunk-add-on-ucc-framework"
-version = "5.36.0"
+version = "5.48.1"
 description = "Splunk Add-on SDK formerly UCC is a build and code generation framework"
 optional = false
-python-versions = ">=3.7,<4.0"
+python-versions = "<4.0,>=3.7"
 files = [
-    {file = "splunk_add_on_ucc_framework-5.36.0-py3-none-any.whl", hash = "sha256:208ff72acd5921e7a0ba941b86699275eacba706125fdbc6ad923de40634b01e"},
-    {file = "splunk_add_on_ucc_framework-5.36.0.tar.gz", hash = "sha256:e93db246cffbb106cf818cb9060847cab543b6ed9a7937592939f5cdee4ed4b7"},
+    {file = "splunk_add_on_ucc_framework-5.48.1-py3-none-any.whl", hash = "sha256:6424108bcc30b81a02342b14cd12fc83dee424ba951be148ddce346dffd3f404"},
+    {file = "splunk_add_on_ucc_framework-5.48.1.tar.gz", hash = "sha256:fc92e930c7910a47ae33089882937b86324ce63763d727c7bfe5d4e368397d87"},
 ]
 
 [package.dependencies]
@@ -1860,19 +1856,16 @@ defusedxml = ">=0.7.1,<0.8.0"
 dunamai = ">=1.9.0,<2.0.0"
 jinja2 = ">=2,<4"
 jsonschema = ">=4.4.0,<5.0.0"
-openapi3 = ">=1.7.0,<2.0.0"
 PyYAML = ">=6.0,<7.0"
-requests = ">=2.31.0,<3.0.0"
-urllib3 = "<2"
 
 [[package]]
 name = "splunk-appinspect"
-version = "3.1.0"
+version = "3.7.0"
 description = "Automatic validation checks for Splunk Apps"
 optional = false
 python-versions = "*"
 files = [
-    {file = "splunk-appinspect-3.1.0.tar.gz", hash = "sha256:aacd0c6bba6efe0c17d057deae274b693cd3a97d8772e4103b403ec7a0eb405b"},
+    {file = "splunk-appinspect-3.7.0.tar.gz", hash = "sha256:e838474ba1834a12ff100432ba769f7f0dff8a1c6bfb85f2d7cf6b4660fdd575"},
 ]
 
 [package.dependencies]
@@ -1894,7 +1887,7 @@ markdown = ">=3.1.1,<4.dev0"
 packaging = "23.0"
 packaging-legacy = "23.0"
 painter = ">=0.3.1,<1.dev0"
-pillow = "9.5.0"
+pillow = ">=9.5.0,<=10.3.0"
 python-magic = "0.4.24"
 pyyaml = ">=6.0.1,<7.dev0"
 regex = "2022.1.18"
@@ -1921,13 +1914,16 @@ url = "https://github.com/NHSDigital/splunk-packaging-toolkit-whl/releases/downl
 
 [[package]]
 name = "splunk-sdk"
-version = "1.7.4"
+version = "2.0.2"
 description = "The Splunk Software Development Kit for Python."
 optional = false
 python-versions = "*"
 files = [
-    {file = "splunk-sdk-1.7.4.tar.gz", hash = "sha256:8f3f149e3a0daf7526ed36882c109e4ec8080e417efe25d23f4578e86d38b9f2"},
+    {file = "splunk-sdk-2.0.2.tar.gz", hash = "sha256:d5ccf6e1b96e493b1399e071ef10f8337e0a39ac2b2acc73fdd375b87b4104cb"},
 ]
+
+[package.dependencies]
+deprecation = "*"
 
 [[package]]
 name = "splunksplwrapper"
@@ -2105,4 +2101,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7,<3.8"
-content-hash = "ba1563b53d4f2bba8023d6886109cb061236040a9fe375d199a53492e9daa362"
+content-hash = "4431d122247fe6c6fe780e9fa21af8d395527be801b79c7f4dfdb1813afec560"
