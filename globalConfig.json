@@ -601,7 +601,7 @@
         "os-dependentLibraries": [
             {
                 "name": "cffi",
-                "version": "1.15.1",
+                "version": "1.16.0",
                 "os": "linux",
                 "target": "3rdparty/linux",
                 "python_version": "37",
