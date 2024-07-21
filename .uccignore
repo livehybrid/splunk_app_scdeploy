@@ -6,3 +6,4 @@ local
 metadata/local.meta
 **/*.pyc
 **/__pycache__
+lib/**/*.so
