@@ -605,6 +605,7 @@
                 "os": "linux",
                 "target": "3rdparty/linux",
                 "python_version": "39",
+                "dependencies": true,
                 "platform": "manylinux2014_x86_64"
             },
             {
@@ -613,6 +614,43 @@
                 "os": "linux",
                 "target": "3rdparty/linux",
                 "python_version": "39",
+                "dependencies": true,
+                "platform": "manylinux2014_x86_64"
+            },
+            {
+                "name": "cffi",
+                "version": "1.16.0",
+                "os": "linux",
+                "target": "3rdparty/linux",
+                "python_version": "39",
+                "dependencies": true,
+                "platform": "manylinux2014_aarch64"
+            },
+            {
+                "name": "pynacl",
+                "version": "1.5.0",
+                "os": "linux",
+                "target": "3rdparty/linux",
+                "python_version": "39",
+                "dependencies": true,
+                "platform": "manylinux2014_aarch64"
+            },
+            {
+                "name": "cffi",
+                "version": "1.15.1",
+                "os": "linux",
+                "target": "3rdparty/linux",
+                "python_version": "37",
+                "dependencies": true,
+                "platform": "manylinux2014_x86_64"
+            },
+            {
+                "name": "pynacl",
+                "version": "1.5.0",
+                "os": "linux",
+                "target": "3rdparty/linux",
+                "python_version": "37",
+                "dependencies": true,
                 "platform": "manylinux2014_x86_64"
             }
         ]
