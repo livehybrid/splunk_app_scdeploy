@@ -597,7 +597,8 @@
         "restRoot": "splunk_app_scdeploy",
         "version": "1.3.1+dirty",
         "displayName": "SplunkCloud Deployment Manager",
-        "schemaVersion": "0.0.3",
+        "schemaVersion": "0.0.8",
+        "supported_themes": ["light", "dark"],
         "os-dependentLibraries": [
             {
                 "name": "pynacl",

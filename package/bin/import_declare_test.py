@@ -13,7 +13,6 @@ sys.path = new_paths
 
 bindir = os.path.dirname(os.path.realpath(os.path.dirname(__file__)))
 libdir = os.path.join(bindir, "lib")
-platform = sys.platform
 python_version = sys.version_info.major
 
 architecture = platform.machine()

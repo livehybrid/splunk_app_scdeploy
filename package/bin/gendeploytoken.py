@@ -55,6 +55,10 @@ log.addHandler(filehandler)  # set the new handler
 # set the log level to INFO, DEBUG as the default is ERROR
 log.setLevel(logging.INFO)
 
+python_version = sys.version_info
+
+log.info(f"Running gendeploytoken with PythonVersion={python_version.major}.{python_version.minor}")
+
 sys.path.append(os.path.join(splunkhome, "etc", "apps", APP_NAME, "lib"))
 
 
@@ -96,7 +100,8 @@ class GenerateSplunkToken(GeneratingCommand):
             **Description:** relative token expiry time.""",
         require=False,
         default="+10m",
-    )  # validate=validators.Match("source_field", r"^.*$")
+        validate=validators.Match("expires_on", r"^\+(\d+)\s*(s|sec|secs|second|seconds|m|min|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks|mon|month|months|q|qtr|qtrs|quarter|quarters|y|yr|yrs|year|years)$")
+    )
 
     gitlab_branch = Option(
         doc="""
@@ -112,7 +117,8 @@ class GenerateSplunkToken(GeneratingCommand):
         **Description:** Override the configured Gitlab Project ID (Useful for deploying large number of projects) .""",
         require=False,
         default="0",
-    )  # validate=validators.Match("source_field", r"^.*$")
+        validate=validators.Match("gitlab_projectid", r"^[0-9]+$")
+    )
 
     conf_map = {
         "gitlab": "dest_gitlab",
@@ -151,6 +157,8 @@ class GenerateSplunkToken(GeneratingCommand):
                     "expires_on": self.expires_on,
                     "audience": self.audience,
                 }
+                loggableTokenResponse = {k: tokenResponse[k] for k in set(list(tokenResponse.keys())) - set(['token'])}
+                self.logger.info(f"Created token with detail={loggableTokenResponse}")
                 return tokenResponse
             else:
                 raise Exception("Unable to retrieve token")
@@ -240,11 +248,11 @@ class GenerateSplunkToken(GeneratingCommand):
         if "user" in remote_config and remote_config.get("user") != "" and remote_config.get("user") is not None:
             self.user = remote_config.get("user", "Unknown Error")
             self.logger.info(
-                f"Generating token for user={self.user} based on destination configuration"
+                f"Generating token_user={self.user} token on behalf of user={context_user} based on destination configuration"
             )
         else:
             self.logger.info(
-                f"Generating token for user={self.user} based on SPL command"
+                f"Generating token_user={self.user} on behalf of user={context_user} based on SPL command"
             )
 
         try:
@@ -286,7 +294,6 @@ class GenerateSplunkToken(GeneratingCommand):
                 gitlab_url = f"https://{gitlab_hostname}/api/v4/projects/{gitlab_projectid}/pipeline?ref={self.gitlab_branch}"
                 resp = requests.post(gitlab_url, json=form_data, headers=headers)
                 respContent = resp.content.decode("utf-8")
-                logging.warning(respContent)
 
                 tokenResponse["token"] = "[REDACTED]"
                 tokenResponse["destination_type"] = self.destination_type
@@ -381,8 +388,7 @@ class GenerateSplunkToken(GeneratingCommand):
                         "SecretString": tokenResponse["token"],
                     }
                     response = secretsmanager_client.put_secret_value(**kwargs)
-                    log_line = f"Token put into secret={secret_name} for requested_user={self.requested_user}."
-                    self.logger.info(log_line)
+                    self.logger.info(f"Token put into secret={secret_name} for requested_user={self.requested_user}.")
                     tokenResponse["message"] = log_line
                     tokenResponse["token"] = "[REDACTED]"
                     yield tokenResponse
