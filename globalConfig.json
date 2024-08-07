@@ -600,10 +600,10 @@
         "schemaVersion": "0.0.3",
         "os-dependentLibraries": [
             {
-                "name": "cffi",
-                "version": "1.16.0",
+                "name": "pynacl",
+                "version": "1.5.0",
                 "os": "linux",
-                "target": "3rdparty/linux-x86_64-py39",
+                "target": "3rdparty/linux/x86_64/py39",
                 "python_version": "39",
                 "dependencies": true,
                 "platform": "manylinux2014_x86_64"
@@ -612,16 +612,7 @@
                 "name": "pynacl",
                 "version": "1.5.0",
                 "os": "linux",
-                "target": "3rdparty/linux-x86_64-py39",
-                "python_version": "39",
-                "dependencies": true,
-                "platform": "manylinux2014_x86_64"
-            },
-            {
-                "name": "cffi",
-                "version": "1.16.0",
-                "os": "linux",
-                "target": "3rdparty/linux-aarch-py39",
+                "target": "3rdparty/linux/aarch/py39",
                 "python_version": "39",
                 "dependencies": true,
                 "platform": "manylinux2014_aarch64"
@@ -630,25 +621,7 @@
                 "name": "pynacl",
                 "version": "1.5.0",
                 "os": "linux",
-                "target": "3rdparty/linux-aarch-py39",
-                "python_version": "39",
-                "dependencies": true,
-                "platform": "manylinux2014_aarch64"
-            },
-            {
-                "name": "cffi",
-                "version": "1.15.1",
-                "os": "linux",
-                "target": "3rdparty/linux-x86_64-py37",
-                "python_version": "37",
-                "dependencies": true,
-                "platform": "manylinux2014_x86_64"
-            },
-            {
-                "name": "pynacl",
-                "version": "1.5.0",
-                "os": "linux",
-                "target": "3rdparty/linux-x86_64-py37",
+                "target": "3rdparty/linux/x86_64/py37",
                 "python_version": "37",
                 "dependencies": true,
                 "platform": "manylinux2014_x86_64"
