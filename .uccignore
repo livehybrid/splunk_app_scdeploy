@@ -6,4 +6,5 @@ local
 metadata/local.meta
 **/*.pyc
 **/__pycache__
-lib/**/*.so
+lib/**/_cffi_backend*.so
+lib/charset_normalizer/*.so
