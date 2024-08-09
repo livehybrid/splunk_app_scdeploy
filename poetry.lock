@@ -1076,12 +1076,12 @@ files = [
 
 [[package]]
 name = "pandoc"
-version = "2.3"
+version = "2.4"
 description = "Pandoc Documents for Python"
 optional = false
 python-versions = "*"
 files = [
-    {file = "pandoc-2.3.tar.gz", hash = "sha256:e772c2c6d871146894579828dbaf1efd538eb64fc7e71d4a6b3a11a18baef90d"},
+    {file = "pandoc-2.4.tar.gz", hash = "sha256:ecd1f8cbb7f4180c6b5db4a17a7c1a74df519995f5f186ef81ce72a9cbd0dd9a"},
 ]
 
 [package.dependencies]
@@ -2082,4 +2082,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7,<3.8"
-content-hash = "ffb20eb7ca668f9b0bc75a58f0305d4225d40497bbeae724953945ba84ebab75"
+content-hash = "7ff452a6bb6ce321c2ba5e50ff20680a259738a6bfac0ffb8239d958bf8026e5"
