@@ -1,4 +1,4 @@
-_import import_declare_test
+import import_declare_test
 
 import sys
 import json
