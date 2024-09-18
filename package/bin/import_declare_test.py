@@ -17,7 +17,7 @@ python_version = sys.version_info
 if platform.system()=="linux":
     architecture = platform.machine()
     #3rdparty/linux/x86_64/python39
-	sys.path.insert(0, os.path.join(libdir, f"3rdparty/linux/{architecture}/python{python_version.major}{python_version.minor}"))
+    sys.path.insert(0, os.path.join(libdir, f"3rdparty/linux/{architecture}/python{python_version.major}{python_version.minor}"))
     # Architectures
     # arm64
     # x86_64
