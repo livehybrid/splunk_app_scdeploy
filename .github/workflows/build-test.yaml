@@ -32,6 +32,7 @@ jobs:
       - name: Generate Addon
         run: |
           echo "Version is now calculated by ucc-gen"
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
           SHORT_COMMIT_HASH=$(git rev-parse --short HEAD)
           VERSION_WITH_HASH="${TAG_VERSION}+${SHORT_COMMIT_HASH}"
           [ -f ./globalConfig.json ] && poetry run ucc-gen -o output --ta-version $VERSION_WITH_HASH || poetry run scripts/build.sh
