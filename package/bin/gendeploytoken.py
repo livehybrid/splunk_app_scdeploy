@@ -83,9 +83,9 @@ class GenerateSplunkToken(GeneratingCommand):
         default="cicd",
     )  # validate=validators.Match("source_field", r"^.*$")
 
-    user = Option(
+    requested_user = Option(
         doc="""
-            **Syntax:** **user=admin** **
+            **Syntax:** **requested_user=admin** **
             **Description:** for which user to generate a token for, if not specified in config""",
         require=False,
     )  # validate=validators.Match("source_field", r"^.*$")
@@ -133,7 +133,7 @@ class GenerateSplunkToken(GeneratingCommand):
         try:
             resp = self.service.post(
                 "/services/authorization/tokens/create",
-                name=self.user,
+                name=self.requested_user,
                 audience=self.audience,
                 expires_on=self.expires_on,
             )
@@ -147,7 +147,7 @@ class GenerateSplunkToken(GeneratingCommand):
                 tokenResponse = {
                     "tokenId": tokenObj["id"],
                     "token": tokenObj["token"],
-                    "user": self.user,
+                    "user": self.requested_user,
                     "expires_on": self.expires_on,
                     "audience": self.audience,
                 }
@@ -238,13 +238,13 @@ class GenerateSplunkToken(GeneratingCommand):
             yield {"error": "Unauthorised to run"}
             return
         if "user" in remote_config and remote_config.get("user") != "" and remote_config.get("user") is not None:
-            self.user = remote_config.get("user", "Unknown Error")
+            self.requested_user = remote_config.get("user", "Unknown Error")
             self.logger.info(
-                f"Generating token for user={self.user} based on destination configuration"
+                f"Generating token for user={self.requested_user} based on destination configuration"
             )
         else:
             self.logger.info(
-                f"Generating token for user={self.user} based on SPL command"
+                f"Generating token for user={self.requested_user} based on SPL command"
             )
 
         try:
