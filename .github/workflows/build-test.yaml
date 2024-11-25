@@ -37,8 +37,17 @@ jobs:
       - name: Generate Addon
         run: |
           echo "Version is now calculated by ucc-gen"
-          TAG_VERSION=${GITHUB_REF#refs/tags/v}
           SHORT_COMMIT_HASH=$(git rev-parse --short HEAD)
+          ref_type=${GITHUB_REF#refs/*/}
+          # Check if the reference is a tag
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # Remove 'refs/tags/' prefix and 'v' from the tag name
+            TAG_VERSION=${GITHUB_REF#refs/tags/v}
+            VERSION_WITH_HASH="${TAG_VERSION}+${SHORT_COMMIT_HASH}"
+          else
+            # Default version for branches
+            TAG_VERSION="1.0.0"
+          fi
           VERSION_WITH_HASH="${TAG_VERSION}+${SHORT_COMMIT_HASH}"
           [ -f ./globalConfig.json ] && poetry run ucc-gen -o output --ta-version $VERSION_WITH_HASH || poetry run scripts/build.sh
           mv output/$(basename $(pwd)) output/app
