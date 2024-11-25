@@ -101,6 +101,7 @@ jobs:
         with:
           json_file: "appinspect_result_${{ matrix.tags }}.json"
           tag: "${{ matrix.tags }}"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
             
   appinspect-api:
     name: quality-appinspect-api
