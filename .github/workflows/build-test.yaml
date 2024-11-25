@@ -73,6 +73,7 @@ jobs:
         with:
           name: dist
           path: dist/
+          
   appinspect:
     name: quality-appinspect
     needs: package
@@ -96,34 +97,16 @@ jobs:
 
       - name: Run Generate Markdown Action
         id: generate-markdown
-        uses: livehybrid/generate-appinspect-markdown-action@v1
+        uses: livehybrid/generate-appinspect-markdown-action@main
         with:
           json_file: "appinspect_result_${{ matrix.tags }}.json"
           tag: "${{ matrix.tags }}"
-
-      - uses: LouisBrunner/checks-action@v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: Test Results - CLI (${{ matrix.tags }})
-          conclusion: success
-          output: |
-            {"summary":"```${{ steps.generate-markdown.outputs.markdown_table }}```"}
             
-      - name: upload-appinspect-report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: appinspect_${{ matrix.tags }}_checks.json
-          path: appinspect_result_${{ matrix.tags }}.json
-      - name: upload-markdown
-        if: matrix.tags == 'manual'
-        uses: actions/upload-artifact@v4
-        with:
-          name: check_markdown
-          path: |
-            *_markdown.txt
-            
-
+  appinspect-api:
+    name: quality-appinspect-api
+    needs: package
+    runs-on: ubuntu-latest          
+    steps:
       - uses: splunk/appinspect-api-action@v3.0
         name: "AppInspect API"
         with:
@@ -132,12 +115,6 @@ jobs:
           app_path: dist
           included_tags: "private_victoria"
           excluded_tags: "offensive"
-
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
 
       - name: Upload Reports
         uses: actions/upload-artifact@v4
