@@ -7,11 +7,11 @@ updates:
       - "/package/lib/"
     schedule:
       interval: "daily"
-    groups:
-      splunk:
-        applies-to: version-updates
-        patterns:
-        - "splunk*"
+      # groups:
+      # splunk:
+      #   applies-to: version-updates
+      #   patterns:
+      #   - "splunk*"
   - package-ecosystem: "github-actions"
     target-branch: "develop"
     directory: "/"
