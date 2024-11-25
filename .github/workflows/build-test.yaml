@@ -7,6 +7,11 @@ on:
     tags:
       - "v*.*.*"
 
+permissions:
+  pull-requests: write
+  actions: write
+  checks: write
+  
 jobs:
   package:
     runs-on: ubuntu-latest
@@ -53,22 +58,57 @@ jobs:
           rm -rf output/app/lib/__pycache__ || true
           mkdir -p dist
           poetry run ucc-gen package -o dist --path output/app
+            
+  appinspect:
+    name: quality-appinspect
+    needs: package
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tags: ["cloud", "private_victoria", "future"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: scan
+        uses: splunk/appinspect-cli-action@v1.9
+        with:
+          app_path: dist/
+          included_tags: ${{ matrix.tags }}
+          result_file: appinspect_result_${{ matrix.tags }}.json
 
-      - name: Local Inspect package
-        run: |
-          PACKAGE_ID=$(basename $(pwd))
-          PACKAGE=$(ls dist/*)
-          mkdir -p reports
-          poetry run splunk-appinspect inspect $PACKAGE --mode=precert --data-format junitxml --output-file reports/$PACKAGE_ID-splunk_appinspect.xml --excluded-tags manual --excluded-tags prerelease  --included-tags splunk_appinspect
-          poetry run splunk-appinspect inspect $PACKAGE --mode=precert --data-format junitxml --output-file reports/$PACKAGE_ID-cloud.xml --excluded-tags manual --excluded-tags prerelease  --included-tags cloud
-          poetry run splunk-appinspect inspect $PACKAGE --mode=precert --data-format junitxml --output-file reports/$PACKAGE_ID-private-victoria.xml --included-tags private_victoria
-          poetry run splunk-appinspect inspect $PACKAGE --mode=precert --data-format junitxml --output-file reports/$PACKAGE_ID-future.xml --included-tags future
-          
-      # - name: Run App Inspect CLI
-      #   uses: splunk/appinspect-cli-action@v1.5
-      #   with:
-      #     app_path: $PACKAGE
-      #     included_tags: cloud, splunk_appinspect
+      - name: Run Generate Markdown Action
+        id: generate-markdown
+        uses: livehybrid/generate-appinspect-markdown-action@v1
+        with:
+          json_file: "appinspect_result_${{ matrix.tags }}.json"
+          matrix_tag: "${{ matrix.tags }}"
+
+      - uses: LouisBrunner/checks-action@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Test Results - CLI (${{ matrix.tags }})
+          conclusion: success
+          output: |
+            {"summary":"```${{ steps.generate-markdown.outputs.markdown_table }}```"}
+            
+      - name: upload-appinspect-report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: appinspect_${{ matrix.tags }}_checks.json
+          path: appinspect_result_${{ matrix.tags }}.json
+      - name: upload-markdown
+        if: matrix.tags == 'manual'
+        uses: actions/upload-artifact@v4
+        with:
+          name: check_markdown
+          path: |
+            *_markdown.txt
+            
 
       - uses: splunk/appinspect-api-action@v3.0
         name: "AppInspect API"
