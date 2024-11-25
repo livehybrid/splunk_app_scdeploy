@@ -99,7 +99,7 @@ jobs:
         uses: livehybrid/generate-appinspect-markdown-action@v1
         with:
           json_file: "appinspect_result_${{ matrix.tags }}.json"
-          matrix_tag: "${{ matrix.tags }}"
+          tag: "${{ matrix.tags }}"
 
       - uses: LouisBrunner/checks-action@v2.0.0
         with:
