@@ -8,10 +8,10 @@ updates:
     schedule:
       interval: "daily"
     groups:
-    splunk:
-      applies-to: version-updates
-      patterns:
-      - "splunk*"
+      splunk:
+        applies-to: version-updates
+        patterns:
+        - "splunk*"
   - package-ecosystem: "github-actions"
     target-branch: "develop"
     directory: "/"
