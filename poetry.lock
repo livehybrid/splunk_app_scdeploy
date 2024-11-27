@@ -1475,13 +1475,13 @@ files = [
 
 [[package]]
 name = "splunk-add-on-ucc-framework"
-version = "5.53.2"
+version = "5.54.0"
 description = "Splunk Add-on SDK formerly UCC is a build and code generation framework"
 optional = false
 python-versions = "<3.13,>=3.7"
 files = [
-    {file = "splunk_add_on_ucc_framework-5.53.2-py3-none-any.whl", hash = "sha256:7f7867a5de03c7e3cdd0999ceb9d6028ccdb88f4c652c0fe714fd0d438cc9089"},
-    {file = "splunk_add_on_ucc_framework-5.53.2.tar.gz", hash = "sha256:a60527d6047ea9fc2caa3001bd81ee52c26214336b5aaeeed80895903a188012"},
+    {file = "splunk_add_on_ucc_framework-5.54.0-py3-none-any.whl", hash = "sha256:0b3027e82b0b8fae1492923d234610369a4255a3d6639caa1fd17aafc78dd955"},
+    {file = "splunk_add_on_ucc_framework-5.54.0.tar.gz", hash = "sha256:7dc798cab708d98e519882a1afa753eaac42f7659954679696e2af7aa3dcbb8d"},
 ]
 
 [package.dependencies]
@@ -1491,7 +1491,7 @@ defusedxml = ">=0.7.1,<0.8.0"
 dunamai = ">=1.22.0,<2.0.0"
 jinja2 = ">=2,<4"
 jsonschema = ">=4.4.0,<5.0.0"
-packaging = "24.0"
+packaging = ">=23.0"
 PyYAML = ">=6.0,<7.0"
 
 [[package]]
@@ -1701,4 +1701,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7,<3.10"
-content-hash = "2a538b70b94d07aa17a737bda5d804fb7721f6e6d2442885b9ffb5ba0b4aa8f2"
+content-hash = "b10161cd4ed47835dd49d33773b94734e8aece6cc98358fba526328bef115077"
