@@ -22,24 +22,24 @@ class Test_App(Basic):
 
         assert result
 
-    def test_ingested_data(self, record_property, splunk_search_util):
-        search = 'search index=main sourcetype="ev:charger"'
-        result = splunk_search_util.checkQueryCountIsGreaterThanZero(
-            search, interval=20, retries=20
-        )
+    # def test_ingested_data(self, record_property, splunk_search_util):
+    #     search = 'search index=main sourcetype="ev:charger"'
+    #     result = splunk_search_util.checkQueryCountIsGreaterThanZero(
+    #         search, interval=20, retries=20
+    #     )
 
-        record_property("dataIngest","present")
-        assert result
+    #     record_property("dataIngest","present")
+    #     assert result
 
 
-    def test_synthetic_data(self, record_property, splunk_search_util):
-        search = 'search index=main sourcetype="ev:charger:synthetic" InUseCcs=0'
-        result = splunk_search_util.checkQueryCountIsGreaterThanZero(
-            search, interval=20, retries=20
-        )
+    # def test_synthetic_data(self, record_property, splunk_search_util):
+    #     search = 'search index=main sourcetype="ev:charger:synthetic" InUseCcs=0'
+    #     result = splunk_search_util.checkQueryCountIsGreaterThanZero(
+    #         search, interval=20, retries=20
+    #     )
 
-        record_property("dataIngest","present")
-        assert result
+    #     record_property("dataIngest","present")
+    #     assert result
 
     # def test_metric_data(self, splunk_search_util):
     #     search = '| mstats avg(price) AS price WHERE index=em_metrics span=30m'

@@ -1,142 +1,44 @@
-name: Splunk App CI/CD 2
-
+name: Splunk App CI/CD
 on:
   push:
     branches:
       - "**"
     tags:
       - "v*.*.*"
-
 permissions:
   pull-requests: write
   actions: write
   checks: write
-  
 jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install poetry
-        run: pipx install poetry
-      - uses: actions/setup-python@v5
+      - name: Package app
+        uses: livehybrid/deploy-splunk-app-action@main
         with:
           python-version: "3.9"
-          cache: "poetry"
-          architecture: "x64"
-      - name: "Setup Environment"
-        run: |
-          poetry install --no-root
 
-      - name: Generate Documentation
-        run: |
-          cat README.md | sed 's/package\/appserver/appserver/g' > package/README.md
-          poetry run grip README.md --export README.html --title ""
-          #poetry run pandoc -s README.html -o package/README.pdf
-
-      - name: Generate Addon
-        run: |
-          echo "Version is now calculated by ucc-gen"
-          SHORT_COMMIT_HASH=$(git rev-parse --short HEAD)
-          ref_type=${GITHUB_REF#refs/*/}
-          # Check if the reference is a tag
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            # Remove 'refs/tags/' prefix and 'v' from the tag name
-            TAG_VERSION=${GITHUB_REF#refs/tags/v}
-            VERSION_WITH_HASH="${TAG_VERSION}+${SHORT_COMMIT_HASH}"
-          else
-            # Default version for branches
-            TAG_VERSION="1.0.0"
-          fi
-          VERSION_WITH_HASH="${TAG_VERSION}+${SHORT_COMMIT_HASH}"
-          [ -f ./globalConfig.json ] && poetry run ucc-gen -o output --ta-version $VERSION_WITH_HASH || poetry run scripts/build.sh
-          mv output/$(basename $(pwd)) output/app
-
-      - name: Generating package
-        run: |
-          set -x
-          rm -rf output/app/lib/3rdparty/**/*.pyc || true
-          rm -rf output/app/lib/__pycache__ || true
-          mkdir -p dist
-          poetry run ucc-gen package -o dist --path output/app
-                      
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-          
   appinspect:
     name: quality-appinspect
     needs: package
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        tags: ["cloud", "private_victoria", "future"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - name: scan
-        uses: splunk/appinspect-cli-action@v2.8.1
-        with:
-          app_path: dist/
-          included_tags: ${{ matrix.tags }}
-          result_file: appinspect_result_${{ matrix.tags }}.json
+    uses: livehybrid/deploy-splunk-app-action/.github/workflows/appinspect-cli.yml@main
+    with:
+      tags: "cloud,future,private_victoria"
+    secrets:
+      token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Run Generate Markdown Action
-        id: generate-markdown
-        if: always()
-        uses: livehybrid/generate-appinspect-markdown-action@main
-        with:
-          json_file: "appinspect_result_${{ matrix.tags }}.json"
-          tag: "${{ matrix.tags }}"
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          include_not_applicable: False
-            
-  appinspect-api:
+  quality-appinspect-api:
     name: quality-appinspect-api
-    needs: appinspect
-    runs-on: ubuntu-latest          
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - uses: splunk/appinspect-api-action@v3.0
-        name: "AppInspect API"
-        with:
-          username: "${{ secrets.SPLUNKBASE_USERNAME }}"
-          password: "${{ secrets.SPLUNKBASE_PASSWORD }}"
-          app_path: dist
-          included_tags: "private_victoria"
-          excluded_tags: "offensive"
-
-      - name: Upload Reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: reports
-          path: reports
-
+    needs:
+      - appinspect
+    uses: livehybrid/deploy-splunk-app-action/.github/workflows/appinspect-api.yml@main
+    secrets:
+      splunkbase_username: ${{ secrets.SPLUNKBASE_USERNAME }}
+      splunkbase_password: ${{ secrets.SPLUNKBASE_PASSWORD }}
+  
   publish-gh:
-    needs: package
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    container: cimg/go:1.19
     permissions:
       contents: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: .
-      - uses: ncipollo/release-action@v1
-        with:
-          artifacts: "dist/*"
-          allowUpdates: true
+    needs:
+      - appinspect
+    uses: livehybrid/deploy-splunk-app-action/.github/workflows/publish.yml@main
