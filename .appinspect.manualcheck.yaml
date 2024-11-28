@@ -20,3 +20,7 @@ check_for_secret_disclosure:
     comment: 'Manual Check - Secret Disclosure'
 check_for_executable_flag:
     comment: 'Manual Check - Executable flag'
+check_for_binary_files_without_source_code:
+    comment: 'Manual Check - Binary files without source code'
+check_for_data_persistence:
+    comment: 'Manual Check - Data Persistence'
