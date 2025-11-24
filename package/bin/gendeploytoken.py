@@ -26,9 +26,9 @@ from splunklib.searchcommands import (
 )
 import splunklib.client as client
 import splunklib.results as results
-from splunktalib.credentials import CredentialManager as CredMgr
-from splunklib.six.moves.urllib.parse import urlsplit
-from splunktalib.common import util as scu
+from solnlib import CredentialManager as CredMgr
+from solnlib import utils as scu
+from urllib.parse import urlsplit
 import boto3
 from botocore.exceptions import ClientError
 from splunklib.binding import HTTPError as SplunkHTTPError
