@@ -108,7 +108,7 @@ class TOKEN_CLEANER(BaseModInput):
     def stream_events(self, inputs, ew):
 
         for input_name, input_item in inputs.inputs.items():
-            self.delete_expired_tokens(ew, int(expiry_offset=input_item['min_expiry']), int(delete_limit=input_item['limit']))
+            self.delete_expired_tokens(ew, expiry_offset=int(input_item['min_expiry']), delete_limit=int(input_item['limit']))
 
 
 if __name__ == '__main__':
