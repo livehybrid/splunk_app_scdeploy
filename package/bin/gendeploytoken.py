@@ -26,7 +26,7 @@ from splunklib.searchcommands import (
 )
 import splunklib.client as client
 import splunklib.results as results
-from solnlib import CredentialManager as CredMgr
+from solnlib.credentials import CredentialManager as CredMgr
 from solnlib import utils as scu
 from urllib.parse import urlsplit
 import boto3
@@ -164,25 +164,23 @@ class GenerateSplunkToken(GeneratingCommand):
         except AttributeError:
             return None
 
-        splunkd_uri = searchinfo.splunkd_uri
+        # splunkd_uri = searchinfo.splunkd_uri
 
-        if splunkd_uri is None:
-            return None
+        # if splunkd_uri is None:
+        #     return None
 
-        self.uri = urlsplit(splunkd_uri, allow_fragments=False)
+        # self.uri = urlsplit(splunkd_uri, allow_fragments=False)
 
         cred_mgr = CredMgr(
-            f"{self.uri.scheme}://{self.uri.hostname}:{self.uri.port}",
+            # f"{self.uri.scheme}://{self.uri.hostname}:{self.uri.port}",
             searchinfo.session_key,
             app=APP_NAME,
             # owner=self._user,
             realm=self.realm,
         )
         # TODO: try block here
-        cred = cred_mgr.get_clear_password(self.destination_name)[self.destination_name]
-        secret_obj = json.loads(list(cred.keys())[0])
-
-        return secret_obj
+        cred = cred_mgr.get_password(self.destination_name)
+        return json.loads(cred)
 
     @property
     def realm(self):
@@ -264,7 +262,6 @@ class GenerateSplunkToken(GeneratingCommand):
 
                 gitlab_token = self.get_config_secret()["token"]
                 headers = {"PRIVATE-TOKEN": gitlab_token}
-                logging.critical(self.service.info)
                 splunkServer = (
                     self.service.info["serverName"]
                     if "serverName" in self.service.info
