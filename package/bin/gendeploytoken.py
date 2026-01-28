@@ -56,6 +56,7 @@ log.addHandler(filehandler)  # set the new handler
 log.setLevel(logging.INFO)
 
 sys.path.append(os.path.join(splunkhome, "etc", "apps", APP_NAME, "lib"))
+log.info(f"Python path (sys.path): {sys.path}")
 
 
 @Configuration()
@@ -118,6 +119,7 @@ class GenerateSplunkToken(GeneratingCommand):
         "gitlab": "dest_gitlab",
         "github": "dest_github",
         "awssm": "dest_awssm",
+        "1password": "dest_1password",
     }
 
     def encrypt(self, public_key: str, secret_value: str) -> str:
@@ -391,7 +393,131 @@ class GenerateSplunkToken(GeneratingCommand):
                 else:
                     return response
 
-                pass
+            elif self.destination_type == "1password":
+                vault = remote_config["vault"]
+                item_title = remote_config["item_title"]
+                item_field = remote_config.get("item_field", "password")
+                
+                op_credentials = self.get_config_secret()
+                service_account_token = op_credentials["service_account_token"]
+                
+                # Use subprocess to call op CLI or use requests for Connect API
+                # For simplicity, we'll use subprocess with op CLI
+                import subprocess
+                
+                try:
+                    # Check if item exists
+                    env = os.environ.copy()
+                    env['OP_SERVICE_ACCOUNT_TOKEN'] = service_account_token
+                    
+                    # Try to get the item first
+                    get_cmd = [
+                        'op', 'item', 'get', item_title,
+                        '--vault', vault,
+                        '--format', 'json'
+                    ]
+                    
+                    result = subprocess.run(
+                        get_cmd,
+                        capture_output=True,
+                        text=True,
+                        env=env,
+                        timeout=30
+                    )
+                    
+                    if result.returncode == 0:
+                        # Item exists, update it
+                        item_data = json.loads(result.stdout)
+                        
+                        # Update the field value
+                        updated_fields = []
+                        field_found = False
+                        
+                        for f in item_data.get('fields', []):
+                            if f.get('id') == item_field or f.get('label', '').lower() == item_field.lower():
+                                f['value'] = tokenResponse["token"]
+                                field_found = True
+                            updated_fields.append(f)
+                        
+                        if not field_found:
+                            # Add new field
+                            updated_fields.append({
+                                'id': item_field,
+                                'label': item_field,
+                                'value': tokenResponse["token"],
+                                'type': 'CONCEALED'
+                            })
+                        
+                        item_data['fields'] = updated_fields
+                        
+                        # Update item using op CLI
+                        update_cmd = [
+                            'op', 'item', 'edit', item_title,
+                            '--vault', vault,
+                            '--format', 'json'
+                        ]
+                        
+                        update_process = subprocess.Popen(
+                            update_cmd,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            env=env
+                        )
+                        
+                        stdout, stderr = update_process.communicate(
+                            input=json.dumps(item_data),
+                            timeout=30
+                        )
+                        
+                        if update_process.returncode == 0:
+                            log_line = f"Token updated in 1Password vault={vault} item={item_title} field={item_field}."
+                            self.logger.info(log_line)
+                            tokenResponse["message"] = log_line
+                        else:
+                            raise Exception(f"Failed to update 1Password item: {stderr}")
+                    else:
+                        # Item doesn't exist, create it
+                        create_cmd = [
+                            'op', 'item', 'create',
+                            '--category', 'Login',
+                            '--title', item_title,
+                            '--vault', vault,
+                            '--field', f'label={item_field},value={tokenResponse["token"]},type=concealed',
+                            '--format', 'json'
+                        ]
+                        
+                        create_result = subprocess.run(
+                            create_cmd,
+                            capture_output=True,
+                            text=True,
+                            env=env,
+                            timeout=30
+                        )
+                        
+                        if create_result.returncode == 0:
+                            log_line = f"Token created in 1Password vault={vault} item={item_title} field={item_field}."
+                            self.logger.info(log_line)
+                            tokenResponse["message"] = log_line
+                        else:
+                            raise Exception(f"Failed to create 1Password item: {create_result.stderr}")
+                    
+                    tokenResponse["token"] = "[REDACTED]"
+                    tokenResponse["destination_type"] = self.destination_type
+                    tokenResponse["destination_name"] = self.destination_name
+                    yield tokenResponse
+                    
+                except subprocess.TimeoutExpired:
+                    self.logger.exception("Timeout while updating 1Password item")
+                    raise Exception("Timeout while updating 1Password item")
+                except json.JSONDecodeError as e:
+                    self.logger.exception(f"Invalid JSON response from 1Password: {e}")
+                    raise Exception(f"Invalid response from 1Password: {e}")
+                except Exception as e:
+                    self.logger.exception(f"Failed to update 1Password item: {e}")
+                    raise Exception(f"Failed to update 1Password item: {str(e)}")
+
             else:
                 tokenResponse["message"] = "Unknown destination"
                 yield tokenResponse

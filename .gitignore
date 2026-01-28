@@ -10,3 +10,5 @@ __pycache__/
 helmut.log
 pytest_splunk_addon.log
 splunksplwrapper.log
+lib
+.env

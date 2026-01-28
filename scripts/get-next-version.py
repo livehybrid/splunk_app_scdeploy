@@ -1,72 +1,85 @@
-import argparse
-import logging
-import os
+#!/usr/bin/env python3
+"""
+Get the next version using dunamai.
+This script is used for the main branch to calculate the next version.
+"""
+
 import subprocess
 import sys
-import traceback
-from typing import Optional, List
-
-from versioningit.core import Versioningit
-from versioningit.errors import Error
-from versioningit.logging import log, warn_bad_version
-from versioningit.util import showcmd
+import re
 
 
-def main(argv: Optional[List[str]] = None) -> None:
-
-    parser = argparse.ArgumentParser(
-        description="print the next version"
-    )
-    parser.add_argument(
-        "--traceback", action="store_true", help="Show full traceback on library error"
-    )
-    parser.add_argument(
-        "-v", "--verbose", action="count", default=0, help="Show more log messages"
-    )
-    parser.add_argument(
-        "-w", "--write", action="store_true", help="Write version to configured file"
-    )
-    parser.add_argument("project_dir", nargs="?", default=os.curdir)
-
-    args = parser.parse_args(argv)
-    if args.verbose == 0:
-        log_level = logging.WARNING
-    elif args.verbose == 1:
-        log_level = logging.INFO
-    else:
-        log_level = logging.DEBUG
-    logging.basicConfig(
-        format="[%(levelname)-8s] %(name)s: %(message)s",
-        level=log_level,
-    )
+def get_version():
+    """Get version using dunamai."""
     try:
-        vgit = Versioningit.from_project_dir(args.project_dir)
-        description = vgit.get_vcs_description()
-        log.info("vcs returned tag %s", description.tag)
-        log.debug("vcs state: %s", description.state)
-        log.debug("vcs branch: %s", description.branch)
-        log.debug("vcs fields: %r", description.fields)
-        tag_version = vgit.get_tag2version(description.tag)
-        log.info("tag2version returned version %s", tag_version)
-        warn_bad_version(tag_version, "Version extracted from tag")
-        next_version = vgit.get_next_version(tag_version, description.branch)
-        print(next_version)
-        if args.write:
-            vgit.write_version(next_version)
-    except Error as e:
-        if args.traceback:
-            traceback.print_exc()
+        # Determine dunamai command (use poetry run if available)
+        import shutil
+        if shutil.which("poetry"):
+            dunamai_cmd = ["poetry", "run", "dunamai"]
         else:
-            print(f"versioningit: {type(e).__name__}: {e}", file=sys.stderr)
-        sys.exit(1)
+            dunamai_cmd = ["dunamai"]
+        
+        # Get base version from git tags matching pattern \d+.\d+.\d+
+        result = subprocess.run(
+            dunamai_cmd + ["from", "git", "--pattern", r"(?P<base>\d+\.\d+\.\d+)", "--format", "{base}"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        base = result.stdout.strip() or "0.0.0"
+        
+        # Get distance (commits since tag)
+        result = subprocess.run(
+            dunamai_cmd + ["from", "git", "--pattern", r"(?P<base>\d+\.\d+\.\d+)", "--format", "{distance}"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        distance = result.stdout.strip() or "0"
+        
+        # Get commit hash
+        result = subprocess.run(
+            dunamai_cmd + ["from", "git", "--pattern", r"(?P<base>\d+\.\d+\.\d+)", "--format", "{commit}"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        commit = result.stdout.strip() or ""
+        
+        # Get dirty status
+        result = subprocess.run(
+            dunamai_cmd + ["from", "git", "--pattern", r"(?P<base>\d+\.\d+\.\d+)", "--format", "{dirty}"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        dirty = result.stdout.strip() or "clean"
+        
+        # Calculate next version (increment patch version)
+        # Splunk requires Major.Minor.Revision format, so we only return the base version
+        parts = base.split(".")
+        if len(parts) == 3:
+            major, minor, patch = parts
+            next_patch = str(int(patch) + 1)
+            next_version = f"{major}.{minor}.{next_patch}"
+        else:
+            # If base version is invalid, default to 1.0.0
+            next_version = "1.0.0"
+        
+        # Return only the base version (Major.Minor.Revision) for Splunk compliance
+        # Do not add distance, commit hash, or dirty suffix as Splunk requires strict format
+        return next_version
+        
     except subprocess.CalledProcessError as e:
-        if args.traceback:
-            traceback.print_exc()
-        else:
-            assert isinstance(e.cmd, list)
-            log.error("%s: command returned %d", showcmd(e.cmd), e.returncode)
-        sys.exit(e.returncode)
+        print(f"Error running dunamai: {e}", file=sys.stderr)
+        if e.stderr:
+            print(e.stderr, file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()  # pragma: no cover
+    version = get_version()
+    print(version)

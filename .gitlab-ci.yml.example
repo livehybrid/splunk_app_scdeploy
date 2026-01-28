@@ -1,0 +1,49 @@
+# GitLab CI configuration for testing received tokens
+# Place this file as .gitlab-ci.yml in your test GitLab project
+
+stages:
+  - validate
+
+validate-token:
+  stage: validate
+  image: curlimages/curl:latest
+  script:
+    - |
+      echo "Validating ACS_TOKEN variable..."
+      if [ -z "$ACS_TOKEN" ]; then
+        echo "Error: ACS_TOKEN variable not found"
+        exit 1
+      fi
+      echo "ACS_TOKEN variable exists"
+    - |
+      # Validate token format
+      TOKEN_LENGTH=${#ACS_TOKEN}
+      if [ $TOKEN_LENGTH -lt 20 ]; then
+        echo "Error: Token appears to be too short"
+        exit 1
+      fi
+      echo "Token format appears valid (length: $TOKEN_LENGTH)"
+    - |
+      # Test token against Splunk API (if SPLUNK_SERVERNAME is available)
+      if [ -n "$SPLUNK_SERVERNAME" ]; then
+        echo "Testing token against Splunk server: $SPLUNK_SERVERNAME"
+        RESPONSE=$(curl -k -s -w "\n%{http_code}" \
+          -H "Authorization: Bearer $ACS_TOKEN" \
+          "https://$SPLUNK_SERVERNAME:8089/services/server/info" || echo "000")
+        
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+        
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "Token validation successful"
+        else
+          echo "Warning: Token validation returned HTTP $HTTP_CODE"
+        fi
+      else
+        echo "SPLUNK_SERVERNAME not set, skipping API test"
+      fi
+  variables:
+    # These variables should be set by the token generation process
+    ACS_TOKEN: $ACS_TOKEN
+    SPLUNK_SERVERNAME: $SPLUNK_SERVERNAME
+    ACS_STACK: $ACS_STACK
+

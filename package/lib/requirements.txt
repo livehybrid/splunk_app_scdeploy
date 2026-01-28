@@ -1,5 +1,6 @@
 # Use built-in boto3 library
 #boto3==1.33.13
 splunktaucclib==8.0.0
-pynacl==1.6.1
-cffi==2.0.0
+# pynacl and cffi are handled via os-dependentLibraries in globalConfig.json
+# to ensure correct platform-specific binaries (Linux x86_64) are installed
+# even when building on macOS ARM

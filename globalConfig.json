@@ -434,6 +434,135 @@
                         }
                     ],
                     "title": "Destination - AWS Secret Manager"
+                },
+                {
+                    "name": "dest_1password",
+                    "table": {
+                        "actions": [
+                            "edit",
+                            "delete",
+                            "clone"
+                        ],
+                        "header": [
+                            {
+                                "label": "Name",
+                                "field": "name"
+                            },
+                            {
+                                "label": "Vault",
+                                "field": "vault"
+                            },
+                            {
+                                "label": "Item Title",
+                                "field": "item_title"
+                            },
+                            {
+                                "label": "Target User",
+                                "field": "user"
+                            }
+                        ]
+                    },
+                    "entity": [
+                        {
+                            "type": "text",
+                            "label": "Name",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of ID should be between 1 and 50",
+                                    "minLength": 1,
+                                    "maxLength": 50
+                                },
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                }
+                            ],
+                            "field": "name",
+                            "help": "Enter a unique name for this destination.",
+                            "required": true
+                        },
+                        {
+                            "field": "help",
+                            "label": "",
+                            "type": "helpLink",
+                            "options": {
+                                "text": "1Password Setup Help",
+                                "link": "https://docs.splunk.com/Documentation"
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "label": "Vault Name",
+                            "field": "vault",
+                            "help": "Name of the 1Password vault",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Item Title",
+                            "field": "item_title",
+                            "help": "Title of the item in 1Password where the token will be stored",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Item Field",
+                            "field": "item_field",
+                            "help": "Field name in the item where the token will be stored (default: password)",
+                            "defaultValue": "password",
+                            "required": false
+                        },
+                        {
+                            "type": "text",
+                            "label": "1Password Service Account Token",
+                            "encrypted": true,
+                            "field": "service_account_token",
+                            "help": "Service account token to access 1Password",
+                            "required": true
+                        },
+                        {
+                            "required": false,
+                            "defaultValue": "",
+                            "field": "user",
+                            "options": {
+                                "createSearchChoice": true,
+                                "endpointUrl": "admin/users"
+                            },
+                            "validators": [
+                                {
+                                    "maxLength": 80,
+                                    "minLength": 1,
+                                    "errorMsg": "Length of index name should be between 1 and 80.",
+                                    "type": "string"
+                                }
+                            ],
+                            "label": "Target User",
+                            "type": "singleSelect"
+                        },
+                        {
+                            "type": "multipleSelect",
+                            "label": "Limited to role(s)",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of index name should be between 1 to 80 characters.",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                }
+                            ],
+                            "defaultValue": "sc_admin",
+                            "options": {
+                                "delimiter": "|",
+                                "endpointUrl": "authorization/roles",
+                                "createSearchChoice": true
+                            },
+                            "field": "limit_role",
+                            "required": true
+                        }
+                    ],
+                    "title": "Destination - 1Password"
                 }
             ],
             "title": "Configuration",
@@ -479,16 +608,9 @@
                             "required": true
                         },
                         {
-                            "type": "text",
-                            "label": "Interval",
-                            "validators": [
-                                {
-                                    "type": "regex",
-                                    "errorMsg": "Interval must be an integer.",
-                                    "pattern": "^\\-[1-9]\\d*$|^\\d*$"
-                                }
-                            ],
+                            "type": "interval",
                             "field": "interval",
+                            "label": "Interval",
                             "help": "Time interval of the data input, in seconds.",
                             "required": true
                         },
@@ -517,7 +639,6 @@
             "table": {
                 "actions": [
                     "edit",
-                    "enable",
                     "delete",
                     "clone"
                 ],
@@ -595,13 +716,13 @@
     "meta": {
         "name": "splunk_app_scdeploy",
         "restRoot": "splunk_app_scdeploy",
-        "version": "1.3.1+dirty",
+        "version": "2025.11.25",
         "displayName": "SplunkCloud Deployment Manager",
-        "schemaVersion": "0.0.3",
+        "schemaVersion": "0.0.9",
         "os-dependentLibraries": [
             {
                 "name": "cffi",
-                "version": "1.16.0",
+                "version": "2.0.0",
                 "os": "linux",
                 "target": "3rdparty/linux/x86_64/python39",
                 "python_version": "39",
@@ -610,7 +731,7 @@
             },
             {
                 "name": "pynacl",
-                "version": "1.5.0",
+                "version": "1.6.1",
                 "os": "linux",
                 "target": "3rdparty/linux/x86_64/python39",
                 "python_version": "39",
@@ -619,7 +740,7 @@
             },
             {
                 "name": "cffi",
-                "version": "1.16.0",
+                "version": "2.0.0",
                 "os": "linux",
                 "target": "3rdparty/linux/aarch64/python39",
                 "python_version": "39",
@@ -628,30 +749,12 @@
             },
             {
                 "name": "pynacl",
-                "version": "1.5.0",
+                "version": "1.6.1",
                 "os": "linux",
                 "target": "3rdparty/linux/aarch64/python39",
                 "python_version": "39",
                 "dependencies": true,
                 "platform": "manylinux2014_aarch64"
-            },
-            {
-                "name": "cffi",
-                "version": "1.15.1",
-                "os": "linux",
-                "target": "3rdparty/linux/x86_64/python37",
-                "python_version": "37",
-                "dependencies": true,
-                "platform": "manylinux2014_x86_64"
-            },
-            {
-                "name": "pynacl",
-                "version": "1.5.0",
-                "os": "linux",
-                "target": "3rdparty/linux/x86_64/python37",
-                "python_version": "37",
-                "dependencies": true,
-                "platform": "manylinux2014_x86_64"
             }
         ]
     }

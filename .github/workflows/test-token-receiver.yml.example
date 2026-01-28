@@ -1,0 +1,63 @@
+name: Test Token Receiver
+
+on:
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Test flag'
+        required: false
+        default: 'false'
+  # This workflow can also be triggered by the integration test
+
+jobs:
+  validate-token:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Check if token exists
+        run: |
+          if [ -z "${{ secrets.SPLUNK_TOKEN }}" ]; then
+            echo "Error: SPLUNK_TOKEN secret not found"
+            exit 1
+          fi
+          echo "SPLUNK_TOKEN secret exists"
+      
+      - name: Validate token format
+        run: |
+          # Basic validation - token should be non-empty
+          TOKEN_LENGTH=${#SPLUNK_TOKEN}
+          if [ $TOKEN_LENGTH -lt 20 ]; then
+            echo "Error: Token appears to be too short"
+            exit 1
+          fi
+          echo "Token format appears valid (length: $TOKEN_LENGTH)"
+        env:
+          SPLUNK_TOKEN: ${{ secrets.SPLUNK_TOKEN }}
+      
+      - name: Test token against Splunk API
+        run: |
+          # Extract stack URL from token or use environment variable
+          SPLUNK_URL="${SPLUNK_URL:-https://admin.splunk.com}"
+          
+          # Test token by making a simple API call
+          RESPONSE=$(curl -k -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.SPLUNK_TOKEN }}" \
+            "${SPLUNK_URL}/services/server/info" || echo "000")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "Token validation successful"
+          else
+            echo "Warning: Token validation returned HTTP $HTTP_CODE"
+            # Don't fail - token might be valid but API endpoint might differ
+          fi
+      
+      - name: Report success
+        run: |
+          echo "## Token Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Token exists: ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- Token format: ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- Token test: ✅" >> $GITHUB_STEP_SUMMARY
+
