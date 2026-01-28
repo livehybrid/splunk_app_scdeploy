@@ -12,3 +12,4 @@ pytest_splunk_addon.log
 splunksplwrapper.log
 lib
 .env
+vars.sh

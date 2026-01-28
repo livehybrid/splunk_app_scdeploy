@@ -12,6 +12,7 @@ import sys
 import argparse
 import logging
 import json
+import time
 from typing import Dict, Optional
 
 try:
@@ -49,13 +50,14 @@ class AppDestinationConfigurator:
         self.host = service.host
         self.port = service.port
     
-    def _delete_destination(self, endpoint: str, name: str):
+    def _delete_destination(self, endpoint: str, name: str, delay_after_delete: float = 2.0):
         """
         Delete an existing destination if it exists.
         
         Args:
             endpoint: REST endpoint name (e.g., 'splunk_app_scdeploy_dest_github')
             name: Destination name to delete
+            delay_after_delete: Seconds to wait after successful delete (default: 2.0)
         """
         try:
             # Try to delete using DELETE method on the specific endpoint/{name}
@@ -65,15 +67,27 @@ class AppDestinationConfigurator:
                 app=APP_NAME
             )
             logger.info(f"Deleted existing destination '{name}' from {endpoint}")
+            # Wait for delete to propagate (especially important for Splunk Cloud)
+            if delay_after_delete > 0:
+                logger.debug(f"Waiting {delay_after_delete} seconds for delete to propagate...")
+                time.sleep(delay_after_delete)
         except HTTPError as e:
-            if e.status == 404:
-                # Destination doesn't exist, which is fine
+            # Check for 404 in status code or error message (Splunk Cloud may return 500 with 404 in body)
+            is_404 = (e.status == 404) or ('404' in str(e)) or ('Not Found' in str(e)) or ('Could not find object' in str(e))
+            if is_404:
+                # Destination doesn't exist, which is fine - don't log as warning
                 logger.debug(f"Destination '{name}' does not exist in {endpoint}, skipping delete")
             else:
                 logger.warning(f"Failed to delete destination '{name}' from {endpoint}: {e}")
                 # Don't raise - we'll try to create anyway
         except Exception as e:
-            logger.warning(f"Unexpected error deleting destination '{name}' from {endpoint}: {e}")
+            # Check if it's a "not found" type error
+            error_str = str(e)
+            is_not_found = ('404' in error_str) or ('Not Found' in error_str) or ('Could not find object' in error_str)
+            if is_not_found:
+                logger.debug(f"Destination '{name}' does not exist in {endpoint}, skipping delete")
+            else:
+                logger.warning(f"Unexpected error deleting destination '{name}' from {endpoint}: {e}")
             # Don't raise - we'll try to create anyway
     
     def store_credential(self, realm: str, name: str, credentials: Dict[str, str]):
@@ -156,7 +170,7 @@ class AppDestinationConfigurator:
             elif e.status == 409:
                 # Conflict - try deleting and retrying once
                 logger.info(f"Destination '{name}' already exists, deleting and retrying...")
-                self._delete_destination(endpoint, name)
+                self._delete_destination(endpoint, name, delay_after_delete=3.0)
                 # Retry the POST
                 response = self.service.post(
                     endpoint,
@@ -216,7 +230,7 @@ class AppDestinationConfigurator:
             elif e.status == 409:
                 # Conflict - try deleting and retrying once
                 logger.info(f"Destination '{name}' already exists, deleting and retrying...")
-                self._delete_destination(endpoint, name)
+                self._delete_destination(endpoint, name, delay_after_delete=3.0)
                 response = self.service.post(
                     endpoint,
                     owner='nobody',
@@ -282,7 +296,7 @@ class AppDestinationConfigurator:
             elif e.status == 409:
                 # Conflict - try deleting and retrying once
                 logger.info(f"Destination '{name}' already exists, deleting and retrying...")
-                self._delete_destination(endpoint, name)
+                self._delete_destination(endpoint, name, delay_after_delete=3.0)
                 response = self.service.post(
                     endpoint,
                     owner='nobody',
@@ -313,6 +327,12 @@ class AppDestinationConfigurator:
         """
         endpoint = f"{APP_NAME}_dest_1password"
         
+        logger.debug(f"Configuring 1Password destination '{name}'")
+        logger.debug(f"  Vault: {vault}")
+        logger.debug(f"  Item title: {item_title}")
+        logger.debug(f"  Item field: {item_field}")
+        logger.debug(f"  Service account token present: {bool(service_account_token)}")
+        
         try:
             # Delete existing destination if it exists (to allow overwriting)
             self._delete_destination(endpoint, name)
@@ -326,6 +346,9 @@ class AppDestinationConfigurator:
                 'limit_role': 'sc_admin|user'
             }
             
+            logger.debug(f"POST request to endpoint: servicesNS/nobody/{APP_NAME}/{endpoint}")
+            logger.debug(f"  Payload keys: {list(payload.keys())}")
+            
             response = self.service.post(
                 endpoint,
                 owner='nobody',
@@ -333,10 +356,14 @@ class AppDestinationConfigurator:
                 **payload
             )
             
+            logger.debug(f"Response status: {response.status}")
+            
             if response.status in [200, 201]:
                 logger.info(f"Successfully configured 1Password destination: {name}")
             else:
                 logger.warning(f"Unexpected status code {response.status} when configuring 1Password destination: {name}")
+                if hasattr(response, 'body'):
+                    logger.debug(f"Response body: {response.body}")
             
         except HTTPError as e:
             if e.status == 404:
@@ -344,7 +371,7 @@ class AppDestinationConfigurator:
             elif e.status == 409:
                 # Conflict - try deleting and retrying once
                 logger.info(f"Destination '{name}' already exists, deleting and retrying...")
-                self._delete_destination(endpoint, name)
+                self._delete_destination(endpoint, name, delay_after_delete=3.0)
                 response = self.service.post(
                     endpoint,
                     owner='nobody',
@@ -418,22 +445,37 @@ class AppDestinationConfigurator:
         
         # Configure 1Password destination
         if env_vars.get('OP_SERVICE_ACCOUNT_TOKEN'):
-            self.configure_1password_destination(
-                name='test_1password',
-                vault=env_vars.get('OP_VAULT_NAME', 'cicd'),
-                item_title='test-splunk-token',
-                item_field='password',
-                service_account_token=env_vars['OP_SERVICE_ACCOUNT_TOKEN']
-            )
+            logger.info("Configuring 1Password destination...")
+            try:
+                self.configure_1password_destination(
+                    name='test_1password',
+                    vault=env_vars.get('OP_VAULT_NAME', 'cicd'),
+                    item_title='test-splunk-token',
+                    item_field='password',
+                    service_account_token=env_vars['OP_SERVICE_ACCOUNT_TOKEN']
+                )
+                logger.info("1Password destination configuration completed")
+            except Exception as e:
+                logger.error(f"Failed to configure 1Password destination: {e}")
+                logger.error("This may be due to:")
+                logger.error("  1. Missing OP_SERVICE_ACCOUNT_TOKEN environment variable")
+                logger.error("  2. Invalid 1Password service account token")
+                logger.error("  3. App endpoint not found or not installed")
+                raise
+        else:
+            logger.info("Skipping 1Password destination (OP_SERVICE_ACCOUNT_TOKEN not set)")
         
         logger.info("All destinations configured successfully")
 
 
 def main():
     """Main entry point."""
+    # Get host from environment variables (check SPLUNKCLOUD_STACK_URL first, then SPLUNK_HOST)
+    default_host = os.getenv('SPLUNKCLOUD_STACK_URL') or os.getenv('SPLUNK_HOST') or 'localhost'
+    
     parser = argparse.ArgumentParser(description='Configure app destinations in Splunk')
-    parser.add_argument('--host', default=os.getenv('SPLUNK_HOST', 'localhost'),
-                       help='Splunk hostname')
+    parser.add_argument('--host', default=default_host,
+                       help='Splunk hostname (defaults to SPLUNKCLOUD_STACK_URL, SPLUNK_HOST, or localhost)')
     parser.add_argument('--port', type=int, default=int(os.getenv('SPLUNK_PORT', '8089')),
                        help='Splunk management port')
     parser.add_argument('--username', default=os.getenv('SPLUNKCLOUD_ADMIN_USER', 'admin'),
@@ -444,14 +486,59 @@ def main():
                        help='HTTP scheme')
     parser.add_argument('--from-env', action='store_true',
                        help='Configure from environment variables')
+    parser.add_argument('--verbose', '-v', action='store_true',
+                       help='Enable verbose/debug output')
     
     args = parser.parse_args()
+    
+    # Set logging level based on verbose flag
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.INFO)
+        logger.setLevel(logging.INFO)
     
     if not args.password:
         logger.error("Password required. Set SPLUNKCLOUD_ADMIN_PASSWORD or use --password")
         sys.exit(1)
     
+    # Log connection details (mask password)
+    connection_url = f"{args.scheme}://{args.host}:{args.port}"
+    
+    # Show which environment variables were used
+    env_source = []
+    if os.getenv('SPLUNKCLOUD_STACK_URL'):
+        env_source.append(f"SPLUNKCLOUD_STACK_URL={os.getenv('SPLUNKCLOUD_STACK_URL')}")
+    if os.getenv('SPLUNK_HOST'):
+        env_source.append(f"SPLUNK_HOST={os.getenv('SPLUNK_HOST')}")
+    if os.getenv('SPLUNK_PORT'):
+        env_source.append(f"SPLUNK_PORT={os.getenv('SPLUNK_PORT')}")
+    
+    # Determine host source for logging
+    host_source = "command line"
+    if args.host == default_host:
+        if os.getenv('SPLUNKCLOUD_STACK_URL'):
+            host_source = "SPLUNKCLOUD_STACK_URL"
+        elif os.getenv('SPLUNK_HOST'):
+            host_source = "SPLUNK_HOST"
+        else:
+            host_source = "default (localhost)"
+    
+    logger.info("=" * 60)
+    logger.info("Attempting to connect to Splunk instance:")
+    if env_source:
+        logger.info(f"  Environment variables detected: {', '.join(env_source)}")
+    logger.info(f"  URL: {connection_url}")
+    logger.info(f"  Scheme: {args.scheme}")
+    logger.info(f"  Host: {args.host} (source: {host_source})")
+    logger.info(f"  Port: {args.port}")
+    logger.info(f"  Username: {args.username}")
+    logger.info(f"  Password: {'*' * len(args.password) if args.password else 'NOT SET'}")
+    logger.info("=" * 60)
+    
     try:
+        logger.debug("Calling client.connect()...")
         # Connect to Splunk
         service = client.connect(
             host=args.host,
@@ -460,7 +547,31 @@ def main():
             password=args.password,
             scheme=args.scheme
         )
-        logger.info(f"Connected to Splunk at {args.scheme}://{args.host}:{args.port}")
+        logger.info("=" * 60)
+        logger.info("✓ Successfully connected to Splunk!")
+        logger.info(f"  Connection URL: {connection_url}")
+        logger.info(f"  Session token: {service.token[:20]}..." if service.token else "  Session token: None")
+        logger.debug(f"  Full service object: {service}")
+        logger.info("=" * 60)
+        
+        # Verify connection by getting server info (non-fatal - connection may still work)
+        try:
+            server_info = service.info
+            logger.info(f"Verified connection - Splunk version: {server_info.get('version', 'unknown')}")
+            logger.debug(f"Full server info: {server_info}")
+        except HTTPError as e:
+            if e.status == 401:
+                logger.warning("Session verification failed with 401, but connection was established.")
+                logger.warning("This may be normal for Splunk Cloud - will attempt to proceed with operations.")
+                logger.debug(f"Verification error details: {e}")
+            else:
+                logger.warning(f"Could not verify connection (HTTP {e.status}): {e.reason}")
+                logger.debug(f"Verification error details: {e}")
+        except Exception as e:
+            logger.warning(f"Could not retrieve server info (connection may still be valid): {e}")
+            logger.debug(f"Verification error type: {type(e).__name__}")
+            import traceback
+            logger.debug(f"Verification traceback:\n{traceback.format_exc()}")
         
         configurator = AppDestinationConfigurator(service)
         
@@ -484,8 +595,33 @@ def main():
             logger.info("Use --from-env to configure from environment variables")
             logger.info("Or implement specific configuration calls here")
     
+    except HTTPError as e:
+        logger.error("=" * 60)
+        logger.error("✗ Connection failed with HTTP error:")
+        logger.error(f"  Status Code: {e.status}")
+        logger.error(f"  Reason: {e.reason}")
+        logger.error(f"  URL: {connection_url}")
+        logger.error(f"  Details: {e}")
+        if hasattr(e, 'body'):
+            logger.error(f"  Response body: {e.body}")
+        logger.error("=" * 60)
+        logger.error("Troubleshooting tips:")
+        logger.error("  1. Verify the hostname/IP address is correct")
+        logger.error("  2. Check that the port is correct (8089 for management port)")
+        logger.error("  3. Verify username and password are correct")
+        logger.error("  4. Check network connectivity to the Splunk instance")
+        logger.error("  5. Verify SSL certificate if using HTTPS")
+        sys.exit(1)
     except Exception as e:
-        logger.error(f"Failed: {e}")
+        logger.error("=" * 60)
+        logger.error("✗ Connection failed with error:")
+        logger.error(f"  Error type: {type(e).__name__}")
+        logger.error(f"  Error message: {str(e)}")
+        logger.error(f"  Connection URL attempted: {connection_url}")
+        logger.error(f"  Username: {args.username}")
+        import traceback
+        logger.debug(f"  Full traceback:\n{traceback.format_exc()}")
+        logger.error("=" * 60)
         sys.exit(1)
 
 

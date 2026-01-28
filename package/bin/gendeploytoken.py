@@ -401,39 +401,66 @@ class GenerateSplunkToken(GeneratingCommand):
                 op_credentials = self.get_config_secret()
                 service_account_token = op_credentials["service_account_token"]
                 
-                # Use subprocess to call op CLI or use requests for Connect API
-                # For simplicity, we'll use subprocess with op CLI
-                import subprocess
-                
+                # Use 1Password Connect API via HTTP requests (works on Splunk servers)
+                # Note: This requires OP_CONNECT_HOST and OP_CONNECT_TOKEN to be configured
+                # or we need to use the service account token with Connect API
                 try:
-                    # Check if item exists
-                    env = os.environ.copy()
-                    env['OP_SERVICE_ACCOUNT_TOKEN'] = service_account_token
+                    connect_host = os.getenv('OP_CONNECT_HOST')
+                    connect_token = os.getenv('OP_CONNECT_TOKEN') or service_account_token
                     
-                    # Try to get the item first
-                    get_cmd = [
-                        'op', 'item', 'get', item_title,
-                        '--vault', vault,
-                        '--format', 'json'
-                    ]
+                    if not connect_host:
+                        raise Exception(
+                            "OP_CONNECT_HOST environment variable not set. "
+                            "1Password Connect API requires a Connect server URL."
+                        )
                     
-                    result = subprocess.run(
-                        get_cmd,
-                        capture_output=True,
-                        text=True,
-                        env=env,
-                        timeout=30
-                    )
+                    headers = {
+                        'Authorization': f'Bearer {connect_token}',
+                        'Content-Type': 'application/json'
+                    }
                     
-                    if result.returncode == 0:
+                    # Step 1: Get vault UUID from vault name
+                    vaults_url = f"{connect_host}/v1/vaults"
+                    vaults_response = requests.get(vaults_url, headers=headers, timeout=30)
+                    vaults_response.raise_for_status()
+                    vaults = vaults_response.json()
+                    
+                    vault_uuid = None
+                    for v in vaults:
+                        if v.get('name') == vault:
+                            vault_uuid = v.get('id')
+                            break
+                    
+                    if not vault_uuid:
+                        raise Exception(f"Vault '{vault}' not found in 1Password Connect")
+                    
+                    # Step 2: Check if item exists (get item UUID from item name)
+                    items_url = f"{connect_host}/v1/vaults/{vault_uuid}/items"
+                    items_response = requests.get(items_url, headers=headers, timeout=30)
+                    items_response.raise_for_status()
+                    items = items_response.json()
+                    
+                    item_uuid = None
+                    existing_item = None
+                    for item in items:
+                        if item.get('title') == item_title:
+                            item_uuid = item.get('id')
+                            # Get full item details
+                            item_url = f"{connect_host}/v1/vaults/{vault_uuid}/items/{item_uuid}"
+                            item_response = requests.get(item_url, headers=headers, timeout=30)
+                            item_response.raise_for_status()
+                            existing_item = item_response.json()
+                            break
+                    
+                    if existing_item:
                         # Item exists, update it
-                        item_data = json.loads(result.stdout)
+                        self.logger.debug(f"Updating existing 1Password item: {item_title}")
                         
                         # Update the field value
                         updated_fields = []
                         field_found = False
                         
-                        for f in item_data.get('fields', []):
+                        for f in existing_item.get('fields', []):
                             if f.get('id') == item_field or f.get('label', '').lower() == item_field.lower():
                                 f['value'] = tokenResponse["token"]
                                 field_found = True
@@ -448,69 +475,66 @@ class GenerateSplunkToken(GeneratingCommand):
                                 'type': 'CONCEALED'
                             })
                         
-                        item_data['fields'] = updated_fields
+                        existing_item['fields'] = updated_fields
                         
-                        # Update item using op CLI
-                        update_cmd = [
-                            'op', 'item', 'edit', item_title,
-                            '--vault', vault,
-                            '--format', 'json'
-                        ]
-                        
-                        update_process = subprocess.Popen(
-                            update_cmd,
-                            stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            text=True,
-                            env=env
-                        )
-                        
-                        stdout, stderr = update_process.communicate(
-                            input=json.dumps(item_data),
+                        # Update item via Connect API
+                        update_url = f"{connect_host}/v1/vaults/{vault_uuid}/items/{item_uuid}"
+                        update_response = requests.put(
+                            update_url,
+                            headers=headers,
+                            json=existing_item,
                             timeout=30
                         )
+                        update_response.raise_for_status()
                         
-                        if update_process.returncode == 0:
-                            log_line = f"Token updated in 1Password vault={vault} item={item_title} field={item_field}."
-                            self.logger.info(log_line)
-                            tokenResponse["message"] = log_line
-                        else:
-                            raise Exception(f"Failed to update 1Password item: {stderr}")
+                        log_line = f"Token updated in 1Password vault={vault} item={item_title} field={item_field}."
+                        self.logger.info(log_line)
+                        tokenResponse["message"] = log_line
                     else:
                         # Item doesn't exist, create it
-                        create_cmd = [
-                            'op', 'item', 'create',
-                            '--category', 'Login',
-                            '--title', item_title,
-                            '--vault', vault,
-                            '--field', f'label={item_field},value={tokenResponse["token"]},type=concealed',
-                            '--format', 'json'
-                        ]
+                        self.logger.debug(f"Creating new 1Password item: {item_title}")
                         
-                        create_result = subprocess.run(
-                            create_cmd,
-                            capture_output=True,
-                            text=True,
-                            env=env,
+                        new_item = {
+                            'vault': {'id': vault_uuid},
+                            'title': item_title,
+                            'category': 'LOGIN',
+                            'fields': [
+                                {
+                                    'id': item_field,
+                                    'label': item_field,
+                                    'value': tokenResponse["token"],
+                                    'type': 'CONCEALED'
+                                }
+                            ]
+                        }
+                        
+                        create_url = f"{connect_host}/v1/vaults/{vault_uuid}/items"
+                        create_response = requests.post(
+                            create_url,
+                            headers=headers,
+                            json=new_item,
                             timeout=30
                         )
+                        create_response.raise_for_status()
                         
-                        if create_result.returncode == 0:
-                            log_line = f"Token created in 1Password vault={vault} item={item_title} field={item_field}."
-                            self.logger.info(log_line)
-                            tokenResponse["message"] = log_line
-                        else:
-                            raise Exception(f"Failed to create 1Password item: {create_result.stderr}")
+                        log_line = f"Token created in 1Password vault={vault} item={item_title} field={item_field}."
+                        self.logger.info(log_line)
+                        tokenResponse["message"] = log_line
                     
                     tokenResponse["token"] = "[REDACTED]"
                     tokenResponse["destination_type"] = self.destination_type
                     tokenResponse["destination_name"] = self.destination_name
                     yield tokenResponse
                     
-                except subprocess.TimeoutExpired:
-                    self.logger.exception("Timeout while updating 1Password item")
-                    raise Exception("Timeout while updating 1Password item")
+                except requests.exceptions.RequestException as e:
+                    self.logger.exception(f"HTTP error while updating 1Password item: {e}")
+                    if hasattr(e, 'response') and e.response is not None:
+                        try:
+                            error_detail = e.response.json()
+                            self.logger.error(f"1Password API error response: {error_detail}")
+                        except:
+                            self.logger.error(f"1Password API error response: {e.response.text}")
+                    raise Exception(f"Failed to update 1Password item via Connect API: {str(e)}")
                 except json.JSONDecodeError as e:
                     self.logger.exception(f"Invalid JSON response from 1Password: {e}")
                     raise Exception(f"Invalid response from 1Password: {e}")
