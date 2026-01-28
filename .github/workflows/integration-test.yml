@@ -37,7 +37,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq curl
+          sudo apt-get install -y jq curl crudini
       
       - name: Install 1Password CLI
         run: |
@@ -50,7 +50,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install splunk-sdk solnlib requests boto3
+          pip install splunk-sdk solnlib requests boto3 splunk-appinspect
       
       - name: Install Poetry
         run: |
