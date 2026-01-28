@@ -1,17 +1,17 @@
-version: "3.7"
-
 services:
   splunk:
+    platform: linux/amd64
     build:
       dockerfile: ./docker/splunk/Dockerfile
       context: ./
       args:
-        - DOCKER_IMAGE=$DOCKER_IMAGE
-        - SPLUNK_VERSION=$SPLUNK_VERSION
+        - DOCKER_IMAGE=${DOCKER_IMAGE:-splunk/splunk}
+        - SPLUNK_VERSION=${SPLUNK_VERSION:-10.2}  
     environment:
       - SPLUNK_START_ARGS=--accept-license
       - SPLUNK_PASSWORD=Chang3d!
       - SPLUNK_HEC_TOKEN=abcd1234
+      - SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com
     volumes:
       - "./output/app:/opt/splunk/etc/apps/${APP_ID}"
       - "./_submodules/0_cicd_base:/opt/splunk/etc/apps/0_cicd_base"
