@@ -178,6 +178,19 @@ except:
     fi
 fi
 
+# Retrieve 1Password Connect server URL (optional; required for 1Password destination in Splunk)
+OP_CONNECT_CHECK=$(get_op_secret "1password-connect" "url" 2>/dev/null)
+if [ -n "$OP_CONNECT_CHECK" ]; then
+    if [ "$IS_SOURCED" = true ]; then
+        echo "Retrieving 1Password Connect URL..." >&2
+    fi
+    export OP_CONNECT_HOST="$OP_CONNECT_CHECK"
+    OP_CONNECT_TOKEN=$(get_op_secret "1password-connect" "password" 2>/dev/null)
+    if [ -n "$OP_CONNECT_TOKEN" ]; then
+        export OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN"
+    fi
+fi
+
 # Retrieve AWS Secrets Manager credentials (optional)
 AWS_CHECK=$(get_op_secret "aws-secrets-manager" "username" 2>/dev/null)
 if [ -n "$AWS_CHECK" ]; then

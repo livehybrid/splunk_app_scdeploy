@@ -82,6 +82,8 @@ jobs:
           [ -n "$AWS_SECRET_ACCESS_KEY" ] && echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}" >> $GITHUB_ENV
           [ -n "$AWS_DEFAULT_REGION" ] && echo "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}" >> $GITHUB_ENV
           [ -n "$AWS_SECRET_NAME" ] && echo "AWS_SECRET_NAME=${AWS_SECRET_NAME}" >> $GITHUB_ENV
+          [ -n "$OP_CONNECT_HOST" ] && echo "OP_CONNECT_HOST=${OP_CONNECT_HOST}" >> $GITHUB_ENV
+          [ -n "$OP_CONNECT_TOKEN" ] && echo "OP_CONNECT_TOKEN=${OP_CONNECT_TOKEN}" >> $GITHUB_ENV
           echo "OP_SERVICE_ACCOUNT_TOKEN=${OP_SERVICE_ACCOUNT_TOKEN}" >> $GITHUB_ENV
       
       - name: Build app
@@ -115,10 +117,20 @@ jobs:
           echo "Waiting for app to be installed..."
           sleep 30
       
+      - name: Obtain Splunk token
+        env:
+          SPLUNKCLOUD_STACK_URL: ${{ env.SPLUNKCLOUD_STACK_URL }}
+          SPLUNK_PORT: '8089'
+          SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
+          SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
+        run: |
+          echo "SPLUNK_TOKEN=$(python3 scripts/obtain_splunk_token.py --format raw)" >> $GITHUB_ENV
+      
       - name: Create test accounts
         env:
           SPLUNK_HOST: ${{ env.SPLUNKCLOUD_STACK_URL }}
           SPLUNK_PORT: '8089'
+          SPLUNK_TOKEN: ${{ env.SPLUNK_TOKEN }}
           SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
           SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
         run: |
@@ -126,7 +138,7 @@ jobs:
             --host "${SPLUNK_HOST}" \
             --port "${SPLUNK_PORT}" \
             --username "${SPLUNKCLOUD_ADMIN_USER}" \
-            --password "${SPLUNKCLOUD_ADMIN_PASSWORD}" \
+            --token "${SPLUNK_TOKEN}" \
             --scheme https \
             --output test_accounts.json
       
@@ -134,6 +146,7 @@ jobs:
         env:
           SPLUNK_HOST: ${{ env.SPLUNKCLOUD_STACK_URL }}
           SPLUNK_PORT: '8089'
+          SPLUNK_TOKEN: ${{ env.SPLUNK_TOKEN }}
           SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
           SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
           GITHUB_REPO: ${{ env.GITHUB_REPO }}
@@ -144,13 +157,15 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           OP_SERVICE_ACCOUNT_TOKEN: ${{ env.OP_SERVICE_ACCOUNT_TOKEN }}
+          OP_CONNECT_HOST: ${{ env.OP_CONNECT_HOST }}
+          OP_CONNECT_TOKEN: ${{ env.OP_CONNECT_TOKEN }}
           OP_VAULT_NAME: 'cicd'
         run: |
           python3 scripts/configure_app_destinations.py \
             --host "${SPLUNK_HOST}" \
             --port "${SPLUNK_PORT}" \
             --username "${SPLUNKCLOUD_ADMIN_USER}" \
-            --password "${SPLUNKCLOUD_ADMIN_PASSWORD}" \
+            --token "${SPLUNK_TOKEN}" \
             --scheme https \
             --from-env || {
             echo "Destination configuration failed, but continuing with tests"
@@ -160,6 +175,7 @@ jobs:
         env:
           SPLUNK_HOST: ${{ env.SPLUNKCLOUD_STACK_URL }}
           SPLUNK_PORT: '8089'
+          SPLUNK_TOKEN: ${{ env.SPLUNK_TOKEN }}
           SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
           SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
         run: |
@@ -167,7 +183,7 @@ jobs:
             --host "${SPLUNK_HOST}" \
             --port "${SPLUNK_PORT}" \
             --username "${SPLUNKCLOUD_ADMIN_USER}" \
-            --password "${SPLUNKCLOUD_ADMIN_PASSWORD}" \
+            --token "${SPLUNK_TOKEN}" \
             --scheme https \
             --output token_results.json
       

@@ -139,7 +139,7 @@ class AppDestinationConfigurator:
                 'repo': repo,
                 'secret_name': secret_name,
                 'token': token,  # Token is sent in form data, Splunk will store it securely
-                'limit_role': 'sc_admin|user'
+                'limit_role': 'admin|sc_admin|user'
             }
             
             # Add user field if provided (matches curl request behavior)
@@ -209,7 +209,7 @@ class AppDestinationConfigurator:
                 'hostname': hostname,
                 'projectid': projectid,
                 'token': token,
-                'limit_role': 'sc_admin|user'
+                'limit_role': 'admin|sc_admin|user'
             }
             
             response = self.service.post(
@@ -272,7 +272,7 @@ class AppDestinationConfigurator:
                 'secretpath': secretpath,
                 'aws_accessid': aws_accessid,
                 'aws_secretkey': aws_secretkey,
-                'limit_role': 'sc_admin|user'
+                'limit_role': 'admin|sc_admin|user'
             }
             
             if iamrole:
@@ -313,8 +313,9 @@ class AppDestinationConfigurator:
             logger.error(f"Failed to configure AWS Secrets Manager destination '{name}': {e}")
             raise
     
-    def configure_1password_destination(self, name: str, vault: str, item_title: str, 
-                                      item_field: str, service_account_token: str):
+    def configure_1password_destination(self, name: str, vault: str, item_title: str,
+                                      item_field: str, service_account_token: str,
+                                      connect_host: str = None, connect_token: str = None):
         """
         Configure 1Password destination.
         
@@ -324,13 +325,17 @@ class AppDestinationConfigurator:
             item_title: Item title in 1Password
             item_field: Field name to store token in
             service_account_token: 1Password service account token
+            connect_host: Optional 1Password Connect server URL; if empty, public 1Password API is used
+            connect_token: Optional Connect API token override; if empty, service account token is used
         """
+        connect_host = (connect_host or "").strip() or None
         endpoint = f"{APP_NAME}_dest_1password"
         
         logger.debug(f"Configuring 1Password destination '{name}'")
         logger.debug(f"  Vault: {vault}")
         logger.debug(f"  Item title: {item_title}")
         logger.debug(f"  Item field: {item_field}")
+        logger.debug(f"  Connect host: {connect_host or '(not set - using public 1Password API)'}")
         logger.debug(f"  Service account token present: {bool(service_account_token)}")
         
         try:
@@ -343,8 +348,12 @@ class AppDestinationConfigurator:
                 'item_title': item_title,
                 'item_field': item_field,
                 'service_account_token': service_account_token,
-                'limit_role': 'sc_admin|user'
+                'limit_role': 'admin|sc_admin|user'
             }
+            if connect_host:
+                payload['connect_host'] = connect_host
+            if connect_token:
+                payload['connect_token'] = connect_token
             
             logger.debug(f"POST request to endpoint: servicesNS/nobody/{APP_NAME}/{endpoint}")
             logger.debug(f"  Payload keys: {list(payload.keys())}")
@@ -443,24 +452,26 @@ class AppDestinationConfigurator:
                 aws_secretkey=env_vars['AWS_SECRET_ACCESS_KEY']
             )
         
-        # Configure 1Password destination
+        # Configure 1Password destination (OP_SERVICE_ACCOUNT_TOKEN required; connect_host optional for public API)
         if env_vars.get('OP_SERVICE_ACCOUNT_TOKEN'):
-            logger.info("Configuring 1Password destination...")
+            connect_host = (env_vars.get('OP_CONNECT_HOST') or "").strip() or None
+            logger.info("Configuring 1Password destination (public API)" if not connect_host else "Configuring 1Password destination (Connect server)...")
             try:
                 self.configure_1password_destination(
                     name='test_1password',
                     vault=env_vars.get('OP_VAULT_NAME', 'cicd'),
                     item_title='test-splunk-token',
                     item_field='password',
-                    service_account_token=env_vars['OP_SERVICE_ACCOUNT_TOKEN']
+                    service_account_token=env_vars['OP_SERVICE_ACCOUNT_TOKEN'],
+                    connect_host=connect_host,
+                    connect_token=env_vars.get('OP_CONNECT_TOKEN')
                 )
                 logger.info("1Password destination configuration completed")
             except Exception as e:
                 logger.error(f"Failed to configure 1Password destination: {e}")
                 logger.error("This may be due to:")
-                logger.error("  1. Missing OP_SERVICE_ACCOUNT_TOKEN environment variable")
-                logger.error("  2. Invalid 1Password service account token")
-                logger.error("  3. App endpoint not found or not installed")
+                logger.error("  1. Missing or invalid OP_SERVICE_ACCOUNT_TOKEN")
+                logger.error("  2. App endpoint not found or not installed")
                 raise
         else:
             logger.info("Skipping 1Password destination (OP_SERVICE_ACCOUNT_TOKEN not set)")
@@ -481,7 +492,9 @@ def main():
     parser.add_argument('--username', default=os.getenv('SPLUNKCLOUD_ADMIN_USER', 'admin'),
                        help='Admin username')
     parser.add_argument('--password', default=os.getenv('SPLUNKCLOUD_ADMIN_PASSWORD'),
-                       help='Admin password')
+                       help='Admin password (not needed if SPLUNK_TOKEN is set)')
+    parser.add_argument('--token', default=os.getenv('SPLUNK_TOKEN'),
+                       help='Long-lived Splunk token (preferred for CI; set SPLUNK_TOKEN or use obtain_splunk_token.py)')
     parser.add_argument('--scheme', choices=['http', 'https'], default='https',
                        help='HTTP scheme')
     parser.add_argument('--from-env', action='store_true',
@@ -499,11 +512,12 @@ def main():
         logging.getLogger().setLevel(logging.INFO)
         logger.setLevel(logging.INFO)
     
-    if not args.password:
-        logger.error("Password required. Set SPLUNKCLOUD_ADMIN_PASSWORD or use --password")
+    use_token = bool(args.token)
+    if not use_token and not args.password:
+        logger.error("Either SPLUNK_TOKEN or password required. Set SPLUNK_TOKEN (run obtain_splunk_token.py first) or SPLUNKCLOUD_ADMIN_PASSWORD")
         sys.exit(1)
     
-    # Log connection details (mask password)
+    # Log connection details (mask password/token)
     connection_url = f"{args.scheme}://{args.host}:{args.port}"
     
     # Show which environment variables were used
@@ -514,6 +528,8 @@ def main():
         env_source.append(f"SPLUNK_HOST={os.getenv('SPLUNK_HOST')}")
     if os.getenv('SPLUNK_PORT'):
         env_source.append(f"SPLUNK_PORT={os.getenv('SPLUNK_PORT')}")
+    if os.getenv('SPLUNK_TOKEN'):
+        env_source.append("SPLUNK_TOKEN=***")
     
     # Determine host source for logging
     host_source = "command line"
@@ -533,20 +549,31 @@ def main():
     logger.info(f"  Scheme: {args.scheme}")
     logger.info(f"  Host: {args.host} (source: {host_source})")
     logger.info(f"  Port: {args.port}")
-    logger.info(f"  Username: {args.username}")
-    logger.info(f"  Password: {'*' * len(args.password) if args.password else 'NOT SET'}")
+    if use_token:
+        logger.info(f"  Auth: token (long-lived, length={len(args.token)})")
+    else:
+        logger.info(f"  Username: {args.username}")
+        logger.info(f"  Password: {'*' * len(args.password) if args.password else 'NOT SET'}")
     logger.info("=" * 60)
     
     try:
         logger.debug("Calling client.connect()...")
         # Connect to Splunk
-        service = client.connect(
-            host=args.host,
-            port=args.port,
-            username=args.username,
-            password=args.password,
-            scheme=args.scheme
-        )
+        if use_token:
+            service = client.connect(
+                host=args.host,
+                port=args.port,
+                token=args.token,
+                scheme=args.scheme
+            )
+        else:
+            service = client.connect(
+                host=args.host,
+                port=args.port,
+                username=args.username,
+                password=args.password,
+                scheme=args.scheme
+            )
         logger.info("=" * 60)
         logger.info("✓ Successfully connected to Splunk!")
         logger.info(f"  Connection URL: {connection_url}")
@@ -588,6 +615,8 @@ def main():
                 'AWS_DEFAULT_REGION': os.getenv('AWS_DEFAULT_REGION'),
                 'AWS_SECRET_NAME': os.getenv('AWS_SECRET_NAME', 'splunk/test-token'),
                 'OP_SERVICE_ACCOUNT_TOKEN': os.getenv('OP_SERVICE_ACCOUNT_TOKEN'),
+                'OP_CONNECT_HOST': os.getenv('OP_CONNECT_HOST'),
+                'OP_CONNECT_TOKEN': os.getenv('OP_CONNECT_TOKEN'),
                 'OP_VAULT_NAME': os.getenv('OP_VAULT_NAME', 'cicd')
             }
             configurator.configure_all_test_destinations(env_vars)

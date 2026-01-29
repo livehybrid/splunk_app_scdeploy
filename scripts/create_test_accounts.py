@@ -31,22 +31,25 @@ logger = logging.getLogger(__name__)
 class SplunkAccountManager:
     """Manages test account creation in Splunk."""
     
-    def __init__(self, host: str, port: int, username: str, password: str, scheme: str = 'https'):
+    def __init__(self, host: str, port: int, username: str = None, password: str = None,
+                 scheme: str = 'https', token: str = None):
         """
         Initialize Splunk connection.
         
         Args:
             host: Splunk hostname
             port: Splunk management port (default 8089)
-            username: Admin username
-            password: Admin password
+            username: Admin username (required when using password auth)
+            password: Admin password (required when using password auth)
             scheme: HTTP scheme (https or http)
+            token: Long-lived Splunk token (preferred for CI; use instead of password when set)
         """
         self.host = host
         self.port = port
         self.username = username
         self.password = password
         self.scheme = scheme
+        self.token = token
         
         connection_url = f"{scheme}://{host}:{port}"
         logger.debug(f"SplunkAccountManager initializing connection:")
@@ -54,18 +57,30 @@ class SplunkAccountManager:
         logger.debug(f"  Scheme: {scheme}")
         logger.debug(f"  Host: {host}")
         logger.debug(f"  Port: {port}")
-        logger.debug(f"  Username: {username}")
-        logger.debug(f"  Password: {'*' * len(password) if password else 'NOT SET'}")
+        if token:
+            logger.debug(f"  Auth: token (long-lived)")
+            logger.debug(f"  Token length: {len(token)}")
+        else:
+            logger.debug(f"  Username: {username}")
+            logger.debug(f"  Password: {'*' * len(password) if password else 'NOT SET'}")
         
         try:
             logger.debug("Calling client.connect()...")
-            self.service = client.connect(
-                host=host,
-                port=port,
-                username=username,
-                password=password,
-                scheme=scheme
-            )
+            if token:
+                self.service = client.connect(
+                    host=host,
+                    port=port,
+                    token=token,
+                    scheme=scheme
+                )
+            else:
+                self.service = client.connect(
+                    host=host,
+                    port=port,
+                    username=username,
+                    password=password,
+                    scheme=scheme
+                )
             logger.info("=" * 60)
             logger.info("✓ Successfully connected to Splunk!")
             logger.info(f"  Connection URL: {connection_url}")
@@ -337,7 +352,9 @@ def main():
     parser.add_argument('--username', default=os.getenv('SPLUNKCLOUD_ADMIN_USER', 'admin'),
                        help='Admin username')
     parser.add_argument('--password', default=os.getenv('SPLUNKCLOUD_ADMIN_PASSWORD'),
-                       help='Admin password')
+                       help='Admin password (not needed if SPLUNK_TOKEN is set)')
+    parser.add_argument('--token', default=os.getenv('SPLUNK_TOKEN'),
+                       help='Long-lived Splunk token (preferred for CI; set SPLUNK_TOKEN or use obtain_splunk_token.py)')
     parser.add_argument('--scheme', choices=['http', 'https'], default='https',
                        help='HTTP scheme')
     parser.add_argument('--base-password', default='Test123!@#',
@@ -358,11 +375,12 @@ def main():
         logging.getLogger().setLevel(logging.INFO)
         logger.setLevel(logging.INFO)
     
-    if not args.password:
-        logger.error("Password required. Set SPLUNKCLOUD_ADMIN_PASSWORD or use --password")
+    use_token = bool(args.token)
+    if not use_token and not args.password:
+        logger.error("Either SPLUNK_TOKEN or password required. Set SPLUNK_TOKEN (run obtain_splunk_token.py first) or SPLUNKCLOUD_ADMIN_PASSWORD")
         sys.exit(1)
     
-    # Log connection details (mask password)
+    # Log connection details (mask password/token)
     connection_url = f"{args.scheme}://{args.host}:{args.port}"
     
     # Show which environment variables were used
@@ -373,6 +391,8 @@ def main():
         env_source.append(f"SPLUNK_HOST={os.getenv('SPLUNK_HOST')}")
     if os.getenv('SPLUNK_PORT'):
         env_source.append(f"SPLUNK_PORT={os.getenv('SPLUNK_PORT')}")
+    if os.getenv('SPLUNK_TOKEN'):
+        env_source.append("SPLUNK_TOKEN=***")
     
     # Determine host source for logging
     host_source = "command line"
@@ -392,8 +412,11 @@ def main():
     logger.info(f"  Scheme: {args.scheme}")
     logger.info(f"  Host: {args.host} (source: {host_source})")
     logger.info(f"  Port: {args.port}")
-    logger.info(f"  Username: {args.username}")
-    logger.info(f"  Password: {'*' * len(args.password) if args.password else 'NOT SET'}")
+    if use_token:
+        logger.info(f"  Auth: token (long-lived, length={len(args.token)})")
+    else:
+        logger.info(f"  Username: {args.username}")
+        logger.info(f"  Password: {'*' * len(args.password) if args.password else 'NOT SET'}")
     logger.info("=" * 60)
     
     try:
@@ -402,7 +425,8 @@ def main():
             port=args.port,
             username=args.username,
             password=args.password,
-            scheme=args.scheme
+            scheme=args.scheme,
+            token=args.token
         )
         
         if args.cleanup:

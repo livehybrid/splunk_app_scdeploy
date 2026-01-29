@@ -449,6 +449,10 @@
                                 "field": "name"
                             },
                             {
+                                "label": "Connect URL",
+                                "field": "connect_host"
+                            },
+                            {
                                 "label": "Vault",
                                 "field": "vault"
                             },
@@ -516,11 +520,26 @@
                         },
                         {
                             "type": "text",
+                            "label": "1Password Connect Server URL",
+                            "field": "connect_host",
+                            "help": "Required for Splunk and systems with glibc < 2.29. Set to your Connect server URL (e.g. https://connect.example.com). If empty and SDK is available (glibc 2.29+), uses public 1Password API. Deploy Connect: https://developer.1password.com/docs/connect/",
+                            "required": false
+                        },
+                        {
+                            "type": "text",
                             "label": "1Password Service Account Token",
                             "encrypted": true,
                             "field": "service_account_token",
                             "help": "Service account token to access 1Password",
                             "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "1Password Connect API Token (optional)",
+                            "encrypted": true,
+                            "field": "connect_token",
+                            "help": "Override token for Connect API; if empty, the service account token above is used.",
+                            "required": false
                         },
                         {
                             "required": false,
@@ -716,9 +735,9 @@
     "meta": {
         "name": "splunk_app_scdeploy",
         "restRoot": "splunk_app_scdeploy",
-        "version": "2025.11.25",
+        "version": "2026.01.20",
         "displayName": "SplunkCloud Deployment Manager",
-        "schemaVersion": "0.0.9",
+        "schemaVersion": "0.0.10",
         "os-dependentLibraries": [
             {
                 "name": "cffi",

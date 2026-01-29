@@ -34,25 +34,35 @@ logger = logging.getLogger(__name__)
 class TokenGenerator:
     """Generates tokens for all destination types."""
     
-    def __init__(self, service: client.Service, username: str = None, password: str = None):
+    def __init__(self, service: client.Service, username: str = None, password: str = None, token: str = None):
         """
         Initialize token generator.
         
         Args:
             service: Connected Splunk service instance
-            username: Username for re-authentication (optional)
-            password: Password for re-authentication (optional)
+            username: Username for re-authentication (optional, when not using token)
+            password: Password for re-authentication (optional, when not using token)
+            token: Long-lived Splunk token (optional; when set, used for connect/reconnect)
         """
         self.service = service
         self._username = username
         self._password = password
-        self._connection_params = {
-            'host': service.host,
-            'port': service.port,
-            'username': username,
-            'password': password,
-            'scheme': service.scheme
-        }
+        self._token = token
+        if token:
+            self._connection_params = {
+                'host': service.host,
+                'port': service.port,
+                'token': token,
+                'scheme': service.scheme
+            }
+        else:
+            self._connection_params = {
+                'host': service.host,
+                'port': service.port,
+                'username': username,
+                'password': password,
+                'scheme': service.scheme
+            }
         
         logger.debug(f"TokenGenerator initialized:")
         logger.debug(f"  Service scheme: {service.scheme}")
@@ -81,8 +91,16 @@ class TokenGenerator:
         except HTTPError as e:
             if e.status == 401:
                 logger.warning("Session expired, attempting to re-authenticate...")
-                # Re-authenticate if we have credentials
-                if self._connection_params.get('username') and self._connection_params.get('password'):
+                # Re-authenticate with token or username/password
+                if self._connection_params.get('token'):
+                    try:
+                        self.service = client.connect(**self._connection_params)
+                        logger.info("Successfully re-authenticated with token")
+                        return True
+                    except Exception as reauth_error:
+                        logger.error(f"Failed to re-authenticate with token: {reauth_error}")
+                        raise Exception("Session expired and re-authentication failed") from reauth_error
+                elif self._connection_params.get('username') and self._connection_params.get('password'):
                     try:
                         self.service = client.connect(**self._connection_params)
                         logger.info("Successfully re-authenticated")
@@ -334,7 +352,9 @@ def main():
     parser.add_argument('--username', default=os.getenv('SPLUNKCLOUD_ADMIN_USER', 'admin'),
                        help='Admin username')
     parser.add_argument('--password', default=os.getenv('SPLUNKCLOUD_ADMIN_PASSWORD'),
-                       help='Admin password')
+                       help='Admin password (not needed if SPLUNK_TOKEN is set)')
+    parser.add_argument('--token', default=os.getenv('SPLUNK_TOKEN'),
+                       help='Long-lived Splunk token (preferred for CI; set SPLUNK_TOKEN or use obtain_splunk_token.py)')
     parser.add_argument('--scheme', choices=['http', 'https'], default='https',
                        help='HTTP scheme')
     parser.add_argument('--destinations', nargs='+',
@@ -354,11 +374,12 @@ def main():
         logging.getLogger().setLevel(logging.INFO)
         logger.setLevel(logging.INFO)
     
-    if not args.password:
-        logger.error("Password required. Set SPLUNKCLOUD_ADMIN_PASSWORD or use --password")
+    use_token = bool(args.token)
+    if not use_token and not args.password:
+        logger.error("Either SPLUNK_TOKEN or password required. Set SPLUNK_TOKEN (run obtain_splunk_token.py first) or SPLUNKCLOUD_ADMIN_PASSWORD")
         sys.exit(1)
     
-    # Log connection details (mask password)
+    # Log connection details (mask password/token)
     connection_url = f"{args.scheme}://{args.host}:{args.port}"
     
     # Show which environment variables were used
@@ -369,6 +390,8 @@ def main():
         env_source.append(f"SPLUNK_HOST={os.getenv('SPLUNK_HOST')}")
     if os.getenv('SPLUNK_PORT'):
         env_source.append(f"SPLUNK_PORT={os.getenv('SPLUNK_PORT')}")
+    if os.getenv('SPLUNK_TOKEN'):
+        env_source.append("SPLUNK_TOKEN=***")
     
     # Determine host source for logging
     host_source = "command line"
@@ -388,20 +411,31 @@ def main():
     logger.info(f"  Scheme: {args.scheme}")
     logger.info(f"  Host: {args.host} (source: {host_source})")
     logger.info(f"  Port: {args.port}")
-    logger.info(f"  Username: {args.username}")
-    logger.info(f"  Password: {'*' * len(args.password) if args.password else 'NOT SET'}")
+    if use_token:
+        logger.info(f"  Auth: token (long-lived, length={len(args.token)})")
+    else:
+        logger.info(f"  Username: {args.username}")
+        logger.info(f"  Password: {'*' * len(args.password) if args.password else 'NOT SET'}")
     logger.info("=" * 60)
     
     try:
         logger.debug("Calling client.connect()...")
         # Connect to Splunk
-        service = client.connect(
-            host=args.host,
-            port=args.port,
-            username=args.username,
-            password=args.password,
-            scheme=args.scheme
-        )
+        if use_token:
+            service = client.connect(
+                host=args.host,
+                port=args.port,
+                token=args.token,
+                scheme=args.scheme
+            )
+        else:
+            service = client.connect(
+                host=args.host,
+                port=args.port,
+                username=args.username,
+                password=args.password,
+                scheme=args.scheme
+            )
         logger.info("=" * 60)
         logger.info("✓ Successfully connected to Splunk!")
         logger.info(f"  Connection URL: {connection_url}")
@@ -428,7 +462,7 @@ def main():
             import traceback
             logger.debug(f"Verification traceback:\n{traceback.format_exc()}")
         
-        generator = TokenGenerator(service, username=args.username, password=args.password)
+        generator = TokenGenerator(service, username=args.username, password=args.password, token=args.token)
         results = generator.generate_all_tokens(destinations=args.destinations)
         
         if args.output:

@@ -1,7 +1,8 @@
-
+# Local dev override: fixed host ports so you can use localhost.
+# Override via env: SPLUNK_WEB_PORT, SPLUNK_HEC_PORT, SPLUNK_MGMT_PORT (defaults: 8000, 8088, 8089)
 services:
   splunk:
     ports:
-      - "8000" # Web UI
-      - "8088" # HEC
-      - "8089" # REST API
+      - "${SPLUNK_WEB_PORT:-8000}:8000"   # Web UI (default http://localhost:8000)
+      - "${SPLUNK_HEC_PORT:-8088}:8088"   # HEC
+      - "${SPLUNK_MGMT_PORT:-8089}:8089"  # Management REST API (for scripts)

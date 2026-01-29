@@ -47,6 +47,47 @@ Binary Format: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamical
 
 This app includes comprehensive automated testing infrastructure that integrates with 1Password for secret management, builds and deploys the app to Splunk Cloud, creates test accounts, executes token generation searches, and validates tokens across all supported destinations.
 
+## Local development (Docker)
+
+To test the app locally without Splunk Cloud (faster iteration):
+
+1. **Start local Splunk** (builds the app, builds the image, starts containers; first run can take a few minutes):
+
+   ```bash
+   make local-dev
+   ```
+
+   This runs `make build`, `make docker-build`, then `docker-compose` with fixed ports:
+   - **Web UI:** http://localhost:8000 (login: `admin` / `Chang3d!`)
+   - **REST API:** https://localhost:8089
+
+2. **Run the test workflow** against local Splunk:
+
+   ```bash
+   make local-create-accounts      # Create test users
+   make local-configure-destinations  # Configure destinations (set GITHUB_*, OP_*, etc. if needed)
+   make local-generate-tokens      # Run token generation searches
+   ```
+
+   For HTTPS to localhost you may need to accept the self-signed cert or set `REQUESTS_CA_BUNDLE=` / `CURL_CA_BUNDLE=` if scripts fail on SSL.
+
+3. **Stop local Splunk:**
+
+   ```bash
+   make down
+   ```
+
+**Troubleshooting**
+
+- **Docker build fails with "lookup http.docker.internal ... connection refused" or "proxyconnect tcp"**  
+  Docker is trying to use a proxy that isn’t reachable. Fix it in one of these ways:
+  1. **Docker Desktop (Mac/Windows):** Open **Settings → Resources → Proxies**. If “Manual proxy configuration” is enabled, either turn it off or set the proxy to a reachable host (not `http.docker.internal` unless you run a proxy on the host). Apply & Restart.
+  2. **Shell:** If you use `HTTP_PROXY`/`HTTPS_PROXY`, run `make local-dev` in a shell where they are unset: `unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy; make local-dev`. The Makefile also clears these for the build step.
+  3. After changing proxy settings, run `make local-dev` again.
+
+- **HTTPS to localhost**  
+  If scripts fail on SSL to `https://localhost:8089`, accept the self-signed cert in your browser once or set `REQUESTS_CA_BUNDLE=` (or your OS equivalent) so Python doesn’t verify the cert.
+
 ## 1Password Vault Structure
 
 The automated testing system uses 1Password to retrieve secrets. Configure the following items in your `cicd` vault:
