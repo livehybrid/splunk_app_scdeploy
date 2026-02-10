@@ -77,8 +77,12 @@ class TOKEN_CLEANER(BaseModInput):
         time_now = datetime.now(timezone.utc).timestamp()
 
         try:
-            # Fetch all tokens
-            tokens_response = self.service.get('/services/authorization/tokens', output_mode="json").body.read()
+            # Fetch all tokens (count=0 bypasses default pagination so we see every token)
+            tokens_response = self.service.get(
+                '/services/authorization/tokens',
+                output_mode="json",
+                count=0,
+            ).body.read()
             tokens = json.loads(tokens_response)['entry']
             removed_tokens = 0
             self.log_info(f"Cleaning up expired tokens where expiry is less than currentTime - expiry_offset={expiry_offset} with a delete_limit={delete_limit}")
