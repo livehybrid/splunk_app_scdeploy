@@ -106,6 +106,14 @@ jobs:
         run: |
           make dist
       
+      - name: Install ACS CLI
+        run: |
+          ACS_VERSION="v2.23.0"
+          curl -sSfLo /tmp/acs.tgz "https://github.com/splunk/acs-cli/releases/download/${ACS_VERSION}/acs_${ACS_VERSION}_linux_amd64.tar.gz"
+          tar -xzf /tmp/acs.tgz -C /tmp
+          sudo install -m 0755 "$(find /tmp -maxdepth 2 -name acs -type f | head -1)" /usr/local/bin/acs
+          acs --version || acs version
+
       - name: Upload to Splunk Cloud via ACS
         env:
           ACS_STACK: ${{ env.ACS_STACK }}
@@ -119,10 +127,12 @@ jobs:
             -d "username=${SPLUNKCLOUD_ADMIN_USER}&password=${SPLUNKCLOUD_ADMIN_PASSWORD}" \
             | grep -oP '(?<=<sessionKey>)[^<]+')
           
-          export STACK_TOKEN=$ACS_TOKEN
-          scripts/acscli_upload.sh || {
-            echo "ACS upload failed, but continuing with tests"
-          }
+          # Mask the session token (derived at runtime, not from 1Password -> not auto-masked)
+          echo "::add-mask::${ACS_TOKEN}"
+          export STACK_TOKEN="$ACS_TOKEN"
+          export STACK_USERNAME="${SPLUNKCLOUD_ADMIN_USER}"
+          # Fail loudly: a swallowed failure here previously hid that the app never installed
+          scripts/acscli_upload.sh
       
       - name: Wait for app installation
         run: |
