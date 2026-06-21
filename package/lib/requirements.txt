@@ -1,6 +1,6 @@
 # Use built-in boto3 library
 #boto3==1.33.13
-splunktaucclib==8.0.0
+splunktaucclib==8.2.0
 # pynacl and cffi are handled via os-dependentLibraries in globalConfig.json
 # onepassword-sdk is NOT bundled: it requires glibc 2.29+ (Splunk 10.2 has 2.28).
 # Use 1Password Connect Server (set connect_host) for 1Password on Splunk / older Linux.
