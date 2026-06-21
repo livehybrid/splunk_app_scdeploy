@@ -187,9 +187,13 @@ class TokenGenerator:
                     logger.error("Session expired but no credentials available for re-authentication")
                     raise Exception("Session expired and cannot re-authenticate") from e
             else:
-                logger.error(f"HTTP error executing search (HTTP {e.status}): {e.reason}")
-                if hasattr(e, 'body'):
-                    logger.debug(f"Response body: {e.body}")
+                _body = getattr(e, 'body', '')
+                if isinstance(_body, (bytes, bytearray)):
+                    try:
+                        _body = _body.decode('utf-8', 'replace')
+                    except Exception:
+                        _body = str(_body)
+                logger.error(f"HTTP error executing search (HTTP {e.status}): {e.reason} -- body: {_body}")
                 raise
         except Exception as e:
             logger.error(f"Failed to execute search: {e}")
