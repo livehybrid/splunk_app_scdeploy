@@ -426,16 +426,16 @@ def main():
                 host=args.host,
                 port=args.port,
                 token=args.token,
-                scheme=args.scheme
-            )
+                scheme=args.scheme,
+                app="splunk_app_scdeploy",            )
         else:
             service = client.connect(
                 host=args.host,
                 port=args.port,
                 username=args.username,
                 password=args.password,
-                scheme=args.scheme
-            )
+                scheme=args.scheme,
+                app="splunk_app_scdeploy",            )
         logger.info("=" * 60)
         logger.info("✓ Successfully connected to Splunk!")
         logger.info(f"  Connection URL: {connection_url}")
