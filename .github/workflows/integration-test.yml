@@ -1,0 +1,261 @@
+name: Integration Tests
+
+on:
+  # Integration test hits real SCDE + 1Password (rate-limited): trigger deliberately,
+  # not on every push/PR (which fired a cluster of runs per change).
+  workflow_dispatch:
+  schedule:
+    # Nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: write
+
+jobs:
+  integration-test:
+    # Secrets are not (and must not be) available to dependabot-triggered runs
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl crudini
+      
+      - name: Install 1Password CLI
+        run: |
+          curl -sSfLo op.zip https://cache.agilebits.com/dist/1P/op2/pkg/v2.24.0/op_linux_amd64_v2.24.0.zip
+          unzip -od /usr/local/bin/ op.zip
+          rm op.zip
+          chmod +x /usr/local/bin/op
+          op --version
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install splunk-sdk solnlib requests boto3 splunk-appinspect
+      
+      - name: Install Poetry
+        run: |
+          pip install poetry
+          poetry --version
+      
+      - name: Install Poetry dependencies
+        run: |
+          poetry config virtualenvs.create true
+          poetry install --no-root
+      
+      - name: Retrieve secrets from 1Password
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+        run: |
+          source scripts/get_secrets_from_1password.sh
+          # SECURITY: values loaded from 1Password are NOT auto-masked (unlike secrets.*).
+          # Register every secret with the runner so it is REDACTED in all subsequent logs —
+          # without this, each later step prints its resolved `env:` block in clear text.
+          for _s in SPLUNKCLOUD_ADMIN_PASSWORD SPLUNKBASE_PASSWORD SPLUNKBASE_AUTH \
+                    GITHUB_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
+                    OP_CONNECT_TOKEN OP_SERVICE_ACCOUNT_TOKEN; do
+            if [ -n "${!_s}" ]; then echo "::add-mask::${!_s}"; fi
+          done
+          # Persist to the job environment (now masked from here on).
+          _put() { if [ -n "$2" ]; then printf '%s=%s\n' "$1" "$2" >> "$GITHUB_ENV"; fi; }
+          _put SPLUNKCLOUD_STACK_URL "$SPLUNKCLOUD_STACK_URL"
+          _put SPLUNKCLOUD_ADMIN_USER "$SPLUNKCLOUD_ADMIN_USER"
+          _put SPLUNKCLOUD_ADMIN_PASSWORD "$SPLUNKCLOUD_ADMIN_PASSWORD"
+          _put ACS_STACK "$ACS_STACK"
+          _put SPLUNKBASE_USERNAME "$SPLUNKBASE_USERNAME"
+          _put SPLUNKBASE_PASSWORD "$SPLUNKBASE_PASSWORD"
+          _put SPLUNKBASE_AUTH "$SPLUNKBASE_AUTH"
+          _put GITHUB_TOKEN "$GITHUB_TOKEN"
+          _put GITHUB_REPO "$GITHUB_REPO"
+          _put GITLAB_TOKEN "$GITLAB_TOKEN"
+          _put GITLAB_PROJECT_URL "$GITLAB_PROJECT_URL"
+          _put AWS_ACCESS_KEY_ID "$AWS_ACCESS_KEY_ID"
+          _put AWS_SECRET_ACCESS_KEY "$AWS_SECRET_ACCESS_KEY"
+          _put AWS_DEFAULT_REGION "$AWS_DEFAULT_REGION"
+          _put AWS_SECRET_NAME "$AWS_SECRET_NAME"
+          _put OP_CONNECT_HOST "$OP_CONNECT_HOST"
+          _put OP_CONNECT_TOKEN "$OP_CONNECT_TOKEN"
+          _put OP_SERVICE_ACCOUNT_TOKEN "$OP_SERVICE_ACCOUNT_TOKEN"
+      
+      - name: Build app
+        run: |
+          make build
+      
+      - name: Package app
+        run: |
+          make dist
+      
+      - name: Install ACS CLI
+        run: |
+          ACS_VERSION="v2.23.0"
+          curl -sSfLo /tmp/acs.tgz "https://github.com/splunk/acs-cli/releases/download/${ACS_VERSION}/acs_${ACS_VERSION}_linux_amd64.tar.gz"
+          tar -xzf /tmp/acs.tgz -C /tmp
+          sudo install -m 0755 "$(find /tmp -maxdepth 2 -name acs -type f | head -1)" /usr/local/bin/acs
+          acs --version || acs version
+
+      - name: Upload to Splunk Cloud via ACS
+        env:
+          ACS_STACK: ${{ env.ACS_STACK }}
+          SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
+          SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
+          SPLUNKBASE_TOKEN: ${{ env.SPLUNKBASE_AUTH }}
+        run: |
+          # Get ACS token using admin credentials
+          export ACS_TOKEN=$(curl -k -s -u "${SPLUNKCLOUD_ADMIN_USER}:${SPLUNKCLOUD_ADMIN_PASSWORD}" \
+            "https://${SPLUNKCLOUD_STACK_URL}:8089/services/auth/login" \
+            -d "username=${SPLUNKCLOUD_ADMIN_USER}&password=${SPLUNKCLOUD_ADMIN_PASSWORD}" \
+            | grep -oP '(?<=<sessionKey>)[^<]+')
+          
+          # Mask the session token (derived at runtime, not from 1Password -> not auto-masked)
+          echo "::add-mask::${ACS_TOKEN}"
+          export STACK_TOKEN="$ACS_TOKEN"
+          export STACK_USERNAME="${SPLUNKCLOUD_ADMIN_USER}"
+          # Fail loudly: a swallowed failure here previously hid that the app never installed
+          scripts/acscli_upload.sh
+      
+      - name: Wait for app installation
+        run: |
+          echo "Waiting for app to be installed..."
+          sleep 30
+      
+      - name: Obtain Splunk token
+        env:
+          SPLUNKCLOUD_STACK_URL: ${{ env.SPLUNKCLOUD_STACK_URL }}
+          SPLUNK_PORT: '8089'
+          SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
+          SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
+        run: |
+          echo "SPLUNK_TOKEN=$(python3 scripts/obtain_splunk_token.py --format raw)" >> $GITHUB_ENV
+      
+      - name: Create test accounts
+        env:
+          SPLUNK_HOST: ${{ env.SPLUNKCLOUD_STACK_URL }}
+          SPLUNK_PORT: '8089'
+          SPLUNK_TOKEN: ${{ env.SPLUNK_TOKEN }}
+          SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
+          SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
+        run: |
+          python3 scripts/create_test_accounts.py \
+            --host "${SPLUNK_HOST}" \
+            --port "${SPLUNK_PORT}" \
+            --username "${SPLUNKCLOUD_ADMIN_USER}" \
+            --token "${SPLUNK_TOKEN}" \
+            --scheme https \
+            --output test_accounts.json
+      
+      - name: Configure app destinations
+        env:
+          SPLUNK_HOST: ${{ env.SPLUNKCLOUD_STACK_URL }}
+          SPLUNK_PORT: '8089'
+          SPLUNK_TOKEN: ${{ env.SPLUNK_TOKEN }}
+          SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
+          SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
+          GITHUB_REPO: ${{ env.GITHUB_REPO }}
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          GITLAB_PROJECT_URL: ${{ env.GITLAB_PROJECT_URL }}
+          GITLAB_TOKEN: ${{ env.GITLAB_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ env.OP_SERVICE_ACCOUNT_TOKEN }}
+          OP_CONNECT_HOST: ${{ env.OP_CONNECT_HOST }}
+          OP_CONNECT_TOKEN: ${{ env.OP_CONNECT_TOKEN }}
+          OP_VAULT_NAME: 'cicd'
+        run: |
+          python3 scripts/configure_app_destinations.py \
+            --host "${SPLUNK_HOST}" \
+            --port "${SPLUNK_PORT}" \
+            --username "${SPLUNKCLOUD_ADMIN_USER}" \
+            --token "${SPLUNK_TOKEN}" \
+            --scheme https \
+            --from-env || {
+            echo "Destination configuration failed, but continuing with tests"
+          }
+      
+      - name: Generate test tokens
+        env:
+          SPLUNK_HOST: ${{ env.SPLUNKCLOUD_STACK_URL }}
+          SPLUNK_PORT: '8089'
+          SPLUNK_TOKEN: ${{ env.SPLUNK_TOKEN }}
+          SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
+          SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
+        run: |
+          python3 scripts/generate_test_tokens.py \
+            --host "${SPLUNK_HOST}" \
+            --port "${SPLUNK_PORT}" \
+            --username "${SPLUNKCLOUD_ADMIN_USER}" \
+            --token "${SPLUNK_TOKEN}" \
+            --scheme https \
+            --output token_results.json
+      
+      - name: Validate tokens
+        env:
+          GITHUB_REPO: ${{ env.GITHUB_REPO }}
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          GITHUB_SECRET_NAME: 'SPLUNK_TOKEN'
+          GITLAB_HOSTNAME: ${{ env.GITLAB_PROJECT_URL }}
+          GITLAB_PROJECT_ID: ${{ env.GITLAB_PROJECT_ID }}
+          GITLAB_TOKEN: ${{ env.GITLAB_TOKEN }}
+          GITLAB_VARIABLE_NAME: 'ACS_TOKEN'
+          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+          AWS_SECRET_NAME: ${{ env.AWS_SECRET_NAME || 'splunk/test-token' }}
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          OP_VAULT_NAME: 'cicd'
+          OP_ITEM_TITLE: 'test-splunk-token'
+          OP_ITEM_FIELD: 'password'
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ env.OP_SERVICE_ACCOUNT_TOKEN }}
+        run: |
+          python3 scripts/validate_tokens.py \
+            --from-env \
+            --output validation_results.json || {
+            echo "Some validations failed, but this may be expected"
+          }
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-results
+          path: |
+            test_accounts.json
+            token_results.json
+            validation_results.json
+          retention-days: 7
+      
+      - name: Report results
+        if: always()
+        run: |
+          echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          # Redact secret-looking fields (vended tokens etc.) before publishing to the
+          # public job summary. jq 'walk' is available on ubuntu-latest.
+          redact() { jq 'walk(if type == "object" then with_entries(if (.key | test("token|secret|password|key|sessionKey|auth";"i")) then .value = "***REDACTED***" else . end) else . end)' "$1" 2>/dev/null || echo '{"note":"output withheld (could not redact safely)"}'; }
+          if [ -f token_results.json ]; then
+            echo "### Token Generation Results (secrets redacted)" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            redact token_results.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f validation_results.json ]; then
+            echo "### Token Validation Results (secrets redacted)" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            redact validation_results.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+

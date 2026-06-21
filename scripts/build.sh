@@ -30,7 +30,7 @@ BRANCH=$(git branch | grep \* | cut -d ' ' -f2)
 if [ "$BRANCH" == "$MAIN_GIT_BRANCH" ]; then
   APP_VERSION="$(python3 scripts/get-next-version.py)"
 else
-  APP_VERSION="$(versioningit)"
+  APP_VERSION="$(scripts/get-version.sh)"
 fi
 
 export APP_VERSION="${APP_VERSION}"

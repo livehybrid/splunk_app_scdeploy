@@ -2,6 +2,7 @@
 # coding=utf-8
 
 from __future__ import absolute_import, division, print_function, unicode_literals
+from collections import deque
 from distutils.ccompiler import new_compiler
 import import_declare_test
 
@@ -10,6 +11,7 @@ __version__ = "1.0.0"
 __status__ = "PRODUCTION"
 import os
 import sys
+import traceback
 import logging
 import requests
 import splunk
@@ -36,6 +38,126 @@ from base64 import b64encode
 
 from nacl import encoding, public
 
+_import_logger = logging.getLogger(__name__)
+
+# Optional: 1Password public API (no Connect server) via SDK
+# Catches ImportError (missing package) and OSError (e.g. GLIBC_2.29 not found on glibc 2.28)
+try:
+    import asyncio
+    from onepassword import (
+        Client,
+        ItemCreateParams,
+        ItemField,
+        ItemFieldType,
+        ItemSection,
+        ItemCategory,
+    )
+    _OP_SDK_AVAILABLE = True
+except (ImportError, OSError) as e:
+    _OP_SDK_AVAILABLE = False
+    if "GLIBC" in str(e) or "libm.so" in str(e):
+        _import_logger.warning(
+            "1Password SDK disabled: native library requires a newer glibc than this system (e.g. glibc 2.29+). "
+            "Use 1Password Connect Server (connect_host) instead, or run Splunk on a system with glibc 2.32+."
+        )
+    else:
+        _import_logger.critical("1Password SDK import failed", exc_info=True)
+
+
+def get_effective_roles(service, role_names):
+    """
+    Given a starting list of role names, return a flattened set of effective roles
+    including all recursively importedRoles.
+    """
+    visited = set()
+    queue = deque(role_names)
+
+    while queue:
+        role_name = queue.popleft()
+        if role_name in visited:
+            continue
+        visited.add(role_name)
+
+        try:
+            role = service.roles[role_name]
+            imported = role.content.get("importedRoles", "")
+            if imported:
+                for sub_role_name in imported.split(","):
+                    sub = sub_role_name.strip()
+                    if sub and sub not in visited:
+                        queue.append(sub)
+        except KeyError:
+            pass
+
+    return list(visited)
+
+
+def _op_public_api_upsert_item(service_account_token, vault_name, item_title, item_field, token_value, app_name, logger):
+    """Use 1Password public API (SDK) to create or update an item. No Connect server."""
+    async def _run():
+        op_client = await Client.authenticate(
+            auth=service_account_token,
+            integration_name=app_name,
+            integration_version="1.0.0",
+        )
+        vaults = await op_client.vaults.list()
+        vault_id = None
+        for v in vaults:
+            name = getattr(v, "name", None) or getattr(v, "title", None)
+            if name == vault_name:
+                vault_id = v.id
+                break
+        if not vault_id:
+            raise Exception(f"Vault '{vault_name}' not found in 1Password")
+        overviews = await op_client.items.list(vault_id)
+        item_id = None
+        for ov in overviews:
+            title = getattr(ov, "title", None)
+            if title == item_title:
+                item_id = ov.id
+                break
+        if item_id:
+            item = await op_client.items.get(vault_id, item_id)
+            field_found = False
+            for f in item.fields:
+                fid = getattr(f, "id", None) or getattr(f, "label", None)
+                if fid == item_field or (getattr(f, "label", None) or "").lower() == item_field.lower():
+                    f.value = token_value
+                    field_found = True
+                    break
+            if not field_found:
+                item.fields.append(
+                    ItemField(
+                        id=item_field,
+                        title=item_field,
+                        field_type=ItemFieldType.CONCEALED,
+                        value=token_value,
+                        section_id="",
+                    )
+                )
+            await op_client.items.put(item)
+            return f"Token updated in 1Password vault={vault_name} item={item_title} field={item_field}."
+        to_create = ItemCreateParams(
+            title=item_title,
+            category=ItemCategory.LOGIN,
+            vault_id=vault_id,
+            fields=[
+                ItemField(
+                    id=item_field,
+                    title=item_field,
+                    field_type=ItemFieldType.CONCEALED,
+                    value=token_value,
+                    section_id="",
+                ),
+            ],
+            sections=[ItemSection(id="", title="")],
+        )
+        await op_client.items.create(to_create)
+        return f"Token created in 1Password vault={vault_name} item={item_title} field={item_field}."
+
+    return asyncio.run(_run())
+
+
 splunkhome = os.environ["SPLUNK_HOME"]
 APP_NAME = scu.get_appname_from_path(__file__)
 
@@ -56,6 +178,7 @@ log.addHandler(filehandler)  # set the new handler
 log.setLevel(logging.INFO)
 
 sys.path.append(os.path.join(splunkhome, "etc", "apps", APP_NAME, "lib"))
+log.info(f"Python path (sys.path): {sys.path}")
 
 
 @Configuration()
@@ -118,6 +241,7 @@ class GenerateSplunkToken(GeneratingCommand):
         "gitlab": "dest_gitlab",
         "github": "dest_github",
         "awssm": "dest_awssm",
+        "1password": "dest_1password",
     }
 
     def encrypt(self, public_key: str, secret_value: str) -> str:
@@ -212,7 +336,10 @@ class GenerateSplunkToken(GeneratingCommand):
     # This is where the stream is received
     def generate(self):
         context_user = self._metadata.searchinfo.username
-        context_roles = self.service.users[context_user].roles
+        direct_roles = self.service.users[context_user].roles
+        context_roles = get_effective_roles(self.service, direct_roles)
+        self.logger.info(f"Context user: {context_user}")
+        self.logger.info(f"Context roles (effective): {context_roles}")
         conf_file = f"{APP_NAME}_{self.conf_map.get(self.destination_type)}"
         confs = self.service.confs[str(conf_file)]
         if self.destination_name in confs:
@@ -378,7 +505,7 @@ class GenerateSplunkToken(GeneratingCommand):
                         "SecretString": tokenResponse["token"],
                     }
                     response = secretsmanager_client.put_secret_value(**kwargs)
-                    log_line = f"Token put into secret={secret_name} for requested_user={self.requested_user}."
+                    log_line = f"Token put into secret={secret_name} for user={self.user}."
                     self.logger.info(log_line)
                     tokenResponse["message"] = log_line
                     tokenResponse["token"] = "[REDACTED]"
@@ -391,7 +518,115 @@ class GenerateSplunkToken(GeneratingCommand):
                 else:
                     return response
 
-                pass
+            elif self.destination_type == "1password":
+                vault = remote_config["vault"]
+                item_title = remote_config["item_title"]
+                item_field = remote_config.get("item_field", "password")
+                
+                op_credentials = self.get_config_secret()
+                service_account_token = op_credentials["service_account_token"]
+                
+                # Optional: Connect server URL. If not set, use public 1Password API (SDK).
+                connect_host = (remote_config.get("connect_host") or "").strip() or os.getenv("OP_CONNECT_HOST")
+                connect_token = (remote_config.get("connect_token") or "").strip() or os.getenv("OP_CONNECT_TOKEN") or service_account_token
+                
+                try:
+                    if connect_host:
+                        # 1Password Connect Server API (self-hosted or hosted Connect)
+                        headers = {
+                            'Authorization': f'Bearer {connect_token}',
+                            'Content-Type': 'application/json'
+                        }
+                        vaults_url = f"{connect_host}/v1/vaults"
+                        vaults_response = requests.get(vaults_url, headers=headers, timeout=30)
+                        vaults_response.raise_for_status()
+                        vaults = vaults_response.json()
+                        vault_uuid = None
+                        for v in vaults:
+                            if v.get('name') == vault:
+                                vault_uuid = v.get('id')
+                                break
+                        if not vault_uuid:
+                            raise Exception(f"Vault '{vault}' not found in 1Password Connect")
+                        items_url = f"{connect_host}/v1/vaults/{vault_uuid}/items"
+                        items_response = requests.get(items_url, headers=headers, timeout=30)
+                        items_response.raise_for_status()
+                        items = items_response.json()
+                        item_uuid = None
+                        existing_item = None
+                        for item in items:
+                            if item.get('title') == item_title:
+                                item_uuid = item.get('id')
+                                item_url = f"{connect_host}/v1/vaults/{vault_uuid}/items/{item_uuid}"
+                                item_response = requests.get(item_url, headers=headers, timeout=30)
+                                item_response.raise_for_status()
+                                existing_item = item_response.json()
+                                break
+                        if existing_item:
+                            self.logger.debug(f"Updating existing 1Password item: {item_title}")
+                            updated_fields = []
+                            field_found = False
+                            for f in existing_item.get('fields', []):
+                                if f.get('id') == item_field or f.get('label', '').lower() == item_field.lower():
+                                    f['value'] = tokenResponse["token"]
+                                    field_found = True
+                                updated_fields.append(f)
+                            if not field_found:
+                                updated_fields.append({
+                                    'id': item_field, 'label': item_field,
+                                    'value': tokenResponse["token"], 'type': 'CONCEALED'
+                                })
+                            existing_item['fields'] = updated_fields
+                            update_url = f"{connect_host}/v1/vaults/{vault_uuid}/items/{item_uuid}"
+                            update_response = requests.put(update_url, headers=headers, json=existing_item, timeout=30)
+                            update_response.raise_for_status()
+                            log_line = f"Token updated in 1Password vault={vault} item={item_title} field={item_field}."
+                        else:
+                            self.logger.debug(f"Creating new 1Password item: {item_title}")
+                            new_item = {
+                                'vault': {'id': vault_uuid}, 'title': item_title, 'category': 'LOGIN',
+                                'fields': [{'id': item_field, 'label': item_field, 'value': tokenResponse["token"], 'type': 'CONCEALED'}]
+                            }
+                            create_url = f"{connect_host}/v1/vaults/{vault_uuid}/items"
+                            create_response = requests.post(create_url, headers=headers, json=new_item, timeout=30)
+                            create_response.raise_for_status()
+                            log_line = f"Token created in 1Password vault={vault} item={item_title} field={item_field}."
+                        self.logger.info(log_line)
+                        tokenResponse["message"] = log_line
+                    else:
+                        # Public 1Password API (no Connect server) via SDK
+                        if not _OP_SDK_AVAILABLE:
+                            raise Exception(
+                                "1Password on this system requires 1Password Connect Server (glibc < 2.29 / Splunk 10.2). "
+                                "Set connect_host to your Connect server URL (e.g. https://connect.example.com). "
+                                "Deploy Connect: https://developer.1password.com/docs/connect/"
+                            )
+                        log_line = _op_public_api_upsert_item(
+                            service_account_token, vault, item_title, item_field, tokenResponse["token"], APP_NAME, self.logger
+                        )
+                        self.logger.info(log_line)
+                        tokenResponse["message"] = log_line
+                    
+                    tokenResponse["token"] = "[REDACTED]"
+                    tokenResponse["destination_type"] = self.destination_type
+                    tokenResponse["destination_name"] = self.destination_name
+                    yield tokenResponse
+                    
+                except requests.exceptions.RequestException as e:
+                    self.logger.exception(f"HTTP error while updating 1Password item: {e}")
+                    if hasattr(e, 'response') and e.response is not None:
+                        try:
+                            self.logger.error(f"1Password API error response: {e.response.json()}")
+                        except Exception:
+                            self.logger.error(f"1Password API error response: {getattr(e.response, 'text', str(e))}")
+                    raise Exception(f"Failed to update 1Password item: {str(e)}")
+                except json.JSONDecodeError as e:
+                    self.logger.exception(f"Invalid JSON response from 1Password: {e}")
+                    raise Exception(f"Invalid response from 1Password: {e}")
+                except Exception as e:
+                    self.logger.exception(f"Failed to update 1Password item: {e}")
+                    raise Exception(f"Failed to update 1Password item: {str(e)}")
+
             else:
                 tokenResponse["message"] = "Unknown destination"
                 yield tokenResponse
