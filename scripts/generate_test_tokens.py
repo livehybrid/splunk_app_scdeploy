@@ -53,7 +53,11 @@ class TokenGenerator:
                 'host': service.host,
                 'port': service.port,
                 'token': token,
-                'scheme': service.scheme
+                'scheme': service.scheme,
+                # Run searches in our installed app's namespace so the app-private
+                # `gendeploytoken` custom command resolves (it is not exported to `search`).
+                'app': 'splunk_app_scdeploy',
+                'owner': 'nobody',
             }
         else:
             self._connection_params = {
@@ -61,7 +65,10 @@ class TokenGenerator:
                 'port': service.port,
                 'username': username,
                 'password': password,
-                'scheme': service.scheme
+                'scheme': service.scheme,
+                # Run searches in our installed app's namespace (see token branch above).
+                'app': 'splunk_app_scdeploy',
+                'owner': 'nobody',
             }
         
         logger.debug(f"TokenGenerator initialized:")
@@ -426,7 +433,9 @@ def main():
                 host=args.host,
                 port=args.port,
                 token=args.token,
-                scheme=args.scheme
+                scheme=args.scheme,
+                app="splunk_app_scdeploy",
+                owner="nobody",
             )
         else:
             service = client.connect(
@@ -434,7 +443,9 @@ def main():
                 port=args.port,
                 username=args.username,
                 password=args.password,
-                scheme=args.scheme
+                scheme=args.scheme,
+                app="splunk_app_scdeploy",
+                owner="nobody",
             )
         logger.info("=" * 60)
         logger.info("✓ Successfully connected to Splunk!")
