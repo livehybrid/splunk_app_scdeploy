@@ -75,10 +75,10 @@ jobs:
           for _s in SPLUNKCLOUD_ADMIN_PASSWORD SPLUNKBASE_PASSWORD SPLUNKBASE_AUTH \
                     GITHUB_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
                     OP_CONNECT_TOKEN OP_SERVICE_ACCOUNT_TOKEN; do
-            [ -n "${!_s}" ] && echo "::add-mask::${!_s}"
+            if [ -n "${!_s}" ]; then echo "::add-mask::${!_s}"; fi
           done
           # Persist to the job environment (now masked from here on).
-          _put() { [ -n "$2" ] && printf '%s=%s\n' "$1" "$2" >> "$GITHUB_ENV"; }
+          _put() { if [ -n "$2" ]; then printf '%s=%s\n' "$1" "$2" >> "$GITHUB_ENV"; fi; }
           _put SPLUNKCLOUD_STACK_URL "$SPLUNKCLOUD_STACK_URL"
           _put SPLUNKCLOUD_ADMIN_USER "$SPLUNKCLOUD_ADMIN_USER"
           _put SPLUNKCLOUD_ADMIN_PASSWORD "$SPLUNKCLOUD_ADMIN_PASSWORD"
