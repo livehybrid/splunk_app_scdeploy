@@ -243,8 +243,8 @@ class OnePasswordClient:
                             result['url'] = value
                     
                     return result
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"1Password get_login_item failed for item '{item}' in vault '{vault}': {e}", file=sys.stderr)
         
         raise ValueError(
             f"Unable to retrieve login item '{item}' from vault '{vault}'. "

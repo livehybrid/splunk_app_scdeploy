@@ -1,17 +1,11 @@
 name: Integration Tests
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
-  push:
-    branches:
-      - main
-      - develop
+  # Integration test hits real SCDE + 1Password (rate-limited): trigger deliberately,
+  # not on every push/PR (which fired a cluster of runs per change).
   workflow_dispatch:
   schedule:
-    # Run daily at 2 AM UTC
+    # Nightly at 2 AM UTC
     - cron: '0 2 * * *'
 
 permissions:

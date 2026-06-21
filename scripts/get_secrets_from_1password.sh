@@ -79,7 +79,7 @@ get_op_secret() {
 # Use the cached path to avoid multiple permission prompts
 get_op_login() {
     local item="$1"
-    python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "$item" 2>/dev/null || echo "{}"
+    python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "$item" || echo "{}"
 }
 
 # Retrieve Splunk Cloud Stack credentials
@@ -87,7 +87,7 @@ if [ "$IS_SOURCED" = true ]; then
     echo "Retrieving Splunk Cloud Stack credentials..." >&2
 fi
 # Single Python call using cached path to minimize permission prompts
-SPLUNK_STACK_RESULT=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "splunk-cloud-stack" 2>/dev/null || echo "{}")
+SPLUNK_STACK_RESULT=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "splunk-cloud-stack" || echo "{}")
 
 if [ -n "$SPLUNK_STACK_RESULT" ] && [ "$SPLUNK_STACK_RESULT" != "{}" ]; then
     # Single Python call to parse all fields at once
@@ -144,7 +144,7 @@ if [ -n "$GITHUB_CHECK" ]; then
     if [ "$IS_SOURCED" = true ]; then
         echo "Retrieving GitHub test repo credentials..." >&2
     fi
-    GITHUB_DATA=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "github-test-repo" 2>/dev/null || echo "{}")
+    GITHUB_DATA=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "github-test-repo" || echo "{}")
     if [ -n "$GITHUB_DATA" ] && [ "$GITHUB_DATA" != "{}" ]; then
         eval $(echo "$GITHUB_DATA" | python3 -c "
 import sys, json
@@ -164,7 +164,7 @@ if [ -n "$GITLAB_CHECK" ]; then
     if [ "$IS_SOURCED" = true ]; then
         echo "Retrieving GitLab test project credentials..." >&2
     fi
-    GITLAB_DATA=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "gitlab-test-project" 2>/dev/null || echo "{}")
+    GITLAB_DATA=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "gitlab-test-project" || echo "{}")
     if [ -n "$GITLAB_DATA" ] && [ "$GITLAB_DATA" != "{}" ]; then
         eval $(echo "$GITLAB_DATA" | python3 -c "
 import sys, json
@@ -197,7 +197,7 @@ if [ -n "$AWS_CHECK" ]; then
     if [ "$IS_SOURCED" = true ]; then
         echo "Retrieving AWS Secrets Manager credentials..." >&2
     fi
-    AWS_DATA=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "aws-secrets-manager" 2>/dev/null || echo "{}")
+    AWS_DATA=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "aws-secrets-manager" || echo "{}")
     if [ -n "$AWS_DATA" ] && [ "$AWS_DATA" != "{}" ]; then
         # Single Python call to parse all AWS fields including secretpath
         eval $(echo "$AWS_DATA" | python3 -c "
