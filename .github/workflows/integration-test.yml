@@ -114,6 +114,10 @@ jobs:
           SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
           SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
           SPLUNKBASE_TOKEN: ${{ env.SPLUNKBASE_AUTH }}
+          # splunk.com creds for the private-app AppInspect auth (acs apps bulk-install private),
+          # else acs prompts for them and fails with EOF in CI.
+          SPLUNK_USERNAME: ${{ env.SPLUNKBASE_USERNAME }}
+          SPLUNK_PASSWORD: ${{ env.SPLUNKBASE_PASSWORD }}
         run: |
           # ACS requires a Splunk Cloud JWT auth token, NOT a /services/auth/login session key
           # (a session key authenticates to :8089 but ACS rejects it ->
