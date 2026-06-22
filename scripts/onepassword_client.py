@@ -182,75 +182,58 @@ class OnePasswordClient:
     
     def get_login_item(self, vault: str, item: str) -> Dict[str, str]:
         """
-        Retrieve entire login item (username, password, url).
-        
-        Args:
-            vault: Vault name
-            item: Item name or UUID
-        
-        Returns:
-            Dictionary with 'username', 'password', and 'url' keys
+        Retrieve a login item's fields (username, password, url) in ONE op call.
+
+        Returns a dict with whatever of {'username','password','url'} the item has
+        (partial is fine). Returns {} / raises only when the item cannot be fetched.
         """
         result = {}
-        
-        # Try to get common fields
-        for field in ['username', 'password', 'url']:
-            try:
-                value = self.get_secret(vault, item, field)
-                if value:
-                    result[field] = value
-            except ValueError:
-                # Field might not exist, continue
-                pass
-        
-        # If we got at least one field, return it
-        if result:
-            return result
-        
-        # Fallback: try to get the item and parse it
+
         if self.use_cli:
             try:
                 env = os.environ.copy()
                 env['OP_SERVICE_ACCOUNT_TOKEN'] = self.service_account_token
-                
-                cmd = [
-                    'op', 'item', 'get', item,
-                    '--vault', vault,
-                    '--format', 'json'
-                ]
-                
-                result_cmd = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                    timeout=30
-                )
-                
-                if result_cmd.returncode == 0:
-                    item_data = json.loads(result_cmd.stdout)
-                    
-                    # Extract all fields
+                cmd = ['op', 'item', 'get', item, '--vault', vault, '--format', 'json']
+                r = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=30)
+                if r.returncode == 0:
+                    item_data = json.loads(r.stdout)
                     for f in item_data.get('fields', []):
-                        label = f.get('label', '').lower()
+                        label = (f.get('label') or '').lower()
                         value = f.get('value', '')
-                        
+                        if not value:
+                            continue
                         if label in ['username', 'user']:
                             result['username'] = value
                         elif label in ['password', 'credential']:
                             result['password'] = value
                         elif label in ['url', 'website', 'hostname', 'server']:
                             result['url'] = value
-                    
                     return result
+                # Surface the real op error (rate limit / not found / auth), but return {} so
+                # callers decide — required-item failures are caught by downstream validation,
+                # optional items (e.g. an absent 1password-connect) are simply skipped.
+                print(f"1Password: could not get item '{item}' from vault '{vault}': {(r.stderr or '').strip()}", file=sys.stderr)
+                return result
             except Exception as e:
                 print(f"1Password get_login_item failed for item '{item}' in vault '{vault}': {e}", file=sys.stderr)
-        
+                return result
+
+        # Connect API path (non-CLI): fetch fields individually, tolerating any that are absent.
+        for field in ['username', 'password', 'url']:
+            try:
+                value = self.get_secret(vault, item, field)
+                if value:
+                    result[field] = value
+            except Exception:
+                pass
+        if result:
+            return result
+
         raise ValueError(
             f"Unable to retrieve login item '{item}' from vault '{vault}'. "
             "Ensure the item exists and contains username, password, and/or url fields."
         )
-    
+
     def _get_vault_uuid(self, vault_name: str) -> str:
         """Get vault UUID from vault name (Connect API only)."""
         import requests
