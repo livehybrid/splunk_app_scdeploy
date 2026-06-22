@@ -74,8 +74,14 @@ acs status current-stack || {
     exit 1
 }
 
-echo "Installing app packages from dist/..."
-if ! acs apps bulk-install private --package-src-dir dist/ --acs-legal-ack=Y; then
+echo "Installing private app from dist/..."
+APP_PKG=$(ls -t dist/*.tar.gz dist/*.tgz 2>/dev/null | head -1)
+if [ -z "$APP_PKG" ]; then
+    echo "Error: no app package (.tar.gz/.tgz) found in dist/" >&2
+    exit 1
+fi
+echo "  Package: $APP_PKG"
+if ! acs apps install private --app-package "$APP_PKG" --acs-legal-ack=Y; then
     echo ""
     echo "Error: Failed to install apps via ACS" >&2
     echo ""
@@ -84,7 +90,7 @@ if ! acs apps bulk-install private --package-src-dir dist/ --acs-legal-ack=Y; th
     ACS_REPORT_DIR="${HOME}/.acs/reports/${ACS_STACK}"
     if [ -d "$ACS_REPORT_DIR" ]; then
         # Find the most recent report file
-        LATEST_REPORT=$(ls -t "${ACS_REPORT_DIR}"/apps_bulk_install_private_*.json 2>/dev/null | head -1)
+        LATEST_REPORT=$(ls -t "${ACS_REPORT_DIR}"/apps_install_private_*.json "${ACS_REPORT_DIR}"/apps_bulk_install_private_*.json 2>/dev/null | head -1)
         if [ -n "$LATEST_REPORT" ] && [ -f "$LATEST_REPORT" ]; then
             echo "=== AppInspect Report ==="
             echo "Report location: $LATEST_REPORT"
