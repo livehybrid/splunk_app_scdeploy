@@ -115,13 +115,14 @@ jobs:
           SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
           SPLUNKBASE_TOKEN: ${{ env.SPLUNKBASE_AUTH }}
         run: |
-          # Get ACS token using admin credentials
-          export ACS_TOKEN=$(curl -k -s -u "${SPLUNKCLOUD_ADMIN_USER}:${SPLUNKCLOUD_ADMIN_PASSWORD}" \
-            "https://${SPLUNKCLOUD_STACK_URL}:8089/services/auth/login" \
-            -d "username=${SPLUNKCLOUD_ADMIN_USER}&password=${SPLUNKCLOUD_ADMIN_PASSWORD}" \
-            | grep -oP '(?<=<sessionKey>)[^<]+')
-          
-          # Mask the session token (derived at runtime, not from 1Password -> not auto-masked)
+          # ACS requires a Splunk Cloud JWT auth token, NOT a /services/auth/login session key
+          # (a session key authenticates to :8089 but ACS rejects it ->
+          #  "stack login failed: failed to retrieve stack type information").
+          # Mint a real token via the same proven path the later steps use.
+          export ACS_TOKEN=$(python3 scripts/obtain_splunk_token.py \
+            --host "${SPLUNKCLOUD_STACK_URL}" --port 8089 \
+            --username "${SPLUNKCLOUD_ADMIN_USER}" --password "${SPLUNKCLOUD_ADMIN_PASSWORD}" \
+            --format raw)
           echo "::add-mask::${ACS_TOKEN}"
           export STACK_TOKEN="$ACS_TOKEN"
           export STACK_USERNAME="${SPLUNKCLOUD_ADMIN_USER}"
