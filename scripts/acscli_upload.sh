@@ -63,7 +63,7 @@ else
         }
     fi
 fi
-
+acs login
 echo "Checking ACS status..."
 acs status current-stack || {
     echo "Error: Failed to get ACS status" >&2
