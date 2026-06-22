@@ -119,14 +119,14 @@ jobs:
           SPLUNK_USERNAME: ${{ env.SPLUNKBASE_USERNAME }}
           SPLUNK_PASSWORD: ${{ env.SPLUNKBASE_PASSWORD }}
         run: |
-          # ACS requires a Splunk Cloud JWT auth token, NOT a /services/auth/login session key
-          # (a session key authenticates to :8089 but ACS rejects it ->
-          #  "stack login failed: failed to retrieve stack type information").
-          # Mint a real token via the same proven path the later steps use.
-          export ACS_TOKEN=$(python3 scripts/obtain_splunk_token.py \
-            --host "${SPLUNKCLOUD_STACK_URL}" --port 8089 \
-            --username "${SPLUNKCLOUD_ADMIN_USER}" --password "${SPLUNKCLOUD_ADMIN_PASSWORD}" \
-            --format raw)
+          # ACS needs a token minted via ITS OWN endpoint (admin.splunk.com/.../adminconfig/v2/tokens),
+          # NOT the stack's :8089 /services/authorization/tokens/create. Stack tokens are scoped to the
+          # instance, so ACS rejects them at the apps endpoint with "Failed to decrypt the token".
+          export ACS_TOKEN=$(curl -sS -u "${SPLUNKCLOUD_ADMIN_USER}:${SPLUNKCLOUD_ADMIN_PASSWORD}" \
+            -X POST "https://admin.splunk.com/${ACS_STACK}/adminconfig/v2/tokens" \
+            --header 'Content-Type: application/json' \
+            --data-raw "{\"user\":\"${SPLUNKCLOUD_ADMIN_USER}\",\"audience\":\"acs-cicd\",\"expiresOn\":\"+1d\"}" \
+            | python3 -c "import sys, json; print(json.load(sys.stdin).get('token', ''))")
           echo "::add-mask::${ACS_TOKEN}"
           export STACK_TOKEN="$ACS_TOKEN"
           export STACK_USERNAME="${SPLUNKCLOUD_ADMIN_USER}"
