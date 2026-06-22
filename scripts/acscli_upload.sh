@@ -12,13 +12,11 @@ fi
 # Check for authentication credentials
 # ACS can authenticate using either:
 # 1. STACK_USERNAME/STACK_PASSWORD (for Splunk Cloud Platform deployment)
-# 2. SPLUNK_USERNAME/SPLUNK_PASSWORD (for splunk.com account)
-# 3. ACS_TOKEN/STACK_TOKEN (JWT token, if already obtained)
+# 2. ACS_TOKEN/STACK_TOKEN (JWT token, if already obtained)
 if [ -z "$STACK_USERNAME" ] && [ -z "$SPLUNK_USERNAME" ] && [ -z "$ACS_TOKEN" ] && [ -z "$STACK_TOKEN" ]; then
     echo "Error: ACS authentication credentials not set" >&2
     echo "Set one of:" >&2
     echo "  - STACK_USERNAME and STACK_PASSWORD (for Splunk Cloud Platform)" >&2
-    echo "  - SPLUNK_USERNAME and SPLUNK_PASSWORD (for splunk.com account)" >&2
     echo "  - ACS_TOKEN or STACK_TOKEN (JWT token)" >&2
     exit 1
 fi
@@ -48,7 +46,7 @@ acs config add-stack "$ACS_STACK" || {
 acs config use-stack "$ACS_STACK"
 
 echo "Logging into ACS..."
-# ACS login will use STACK_USERNAME/STACK_PASSWORD or SPLUNK_USERNAME/SPLUNK_PASSWORD
+# ACS login will use STACK_USERNAME/STACK_PASSWORD 
 # from environment variables, or ACS_TOKEN if set
 if [ -n "$ACS_TOKEN" ] || [ -n "$STACK_TOKEN" ]; then
     echo "  Using token-based authentication"
@@ -57,16 +55,14 @@ else
     echo "  Using username/password authentication"
     if [ -n "$STACK_USERNAME" ]; then
         echo "    Stack Username: ${STACK_USERNAME}"
-    elif [ -n "$SPLUNK_USERNAME" ]; then
-        echo "    Splunk.com Username: ${SPLUNK_USERNAME}"
+        # TODO: Do ACS login here using username/password
+        acs login --token-user ${STACK_USERNAME} || {
+            echo "Error: Failed to login to ACS" >&2
+            echo "Check your credentials and ensure ACS CLI is properly configured" >&2
+            exit 1
+        }
     fi
 fi
-
-acs login --token-user ${STACK_USERNAME} || {
-    echo "Error: Failed to login to ACS" >&2
-    echo "Check your credentials and ensure ACS CLI is properly configured" >&2
-    exit 1
-}
 
 echo "Checking ACS status..."
 acs status current-stack || {
