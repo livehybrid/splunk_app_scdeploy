@@ -3,7 +3,6 @@
 .idea
 extras
 output
-poetry.lock
 package/local/
 tmp/
 __pycache__/
@@ -13,3 +12,9 @@ splunksplwrapper.log
 lib
 .env
 vars.sh
+# Deliberately unlocked: addonfactory-ucc-generator-action v3.0.0 has a
+# poetry.lock-triggered path that pip-installs "poetry==" (unset env) and, on
+# newer action versions, REWRITES requirements.txt/package/lib from the lock
+# at build time — silently changing the packaged app. Version determinism for
+# the test env comes from the pyproject pins instead.
+poetry.lock
