@@ -18,6 +18,70 @@ jobs:
         with:
           python-version: "3.9"
 
+  pytest-integration:
+    name: pytest (splunk-docker)
+    # The repo has carried a pytest-splunk-addon suite since the cicd-template
+    # days but it never ran in GitHub CI (only the GitLab-shaped ci-up.sh flow).
+    # This job runs it against the repo's own docker Splunk with fixed port
+    # mappings (the Makefile's dynamic-port discovery is for local/GitLab use).
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      APP_ID: splunk_app_scdeploy
+    steps:
+      - name: Checkout code (with submodules)
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install Poetry + dependencies
+        run: |
+          pip install --upgrade pip poetry
+          poetry install --no-root
+
+      - name: Build app (ucc-gen)
+        run: make build
+
+      - name: Start Splunk (fixed ports)
+        run: |
+          cat > docker-compose.ci-ports.yml <<'EOF'
+          services:
+            splunk:
+              ports:
+                - "8000:8000"
+                - "8088:8088"
+                - "8089:8089"
+          EOF
+          docker compose -f docker-compose.yml -f docker-compose.ci-ports.yml up -d --build
+          # wait for the container's ansible provisioning to finish
+          for i in $(seq 1 60); do
+            docker compose logs splunk 2>/dev/null | grep -q 'Ansible playbook complete' && break
+            sleep 10
+          done
+          docker compose logs splunk 2>/dev/null | grep -q 'Ansible playbook complete' || {
+            echo 'Splunk never became ready'; docker compose logs --tail 100 splunk; exit 1; }
+
+      - name: Run pytest
+        run: |
+          poetry run pytest tests/ -v -ra \
+            --splunk-host=localhost --splunk-port=8089 \
+            --splunk-hec-port=8088 --splunkweb-port=8000
+
+      - name: Splunk logs on failure
+        if: failure()
+        run: docker compose logs --tail 200 splunk || true
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v || true
+
   appinspect:
     name: quality-appinspect
     needs: package
@@ -41,4 +105,5 @@ jobs:
       contents: write
     needs:
       - appinspect
+      - pytest-integration
     uses: livehybrid/deploy-splunk-app-action/.github/workflows/publish.yml@main
