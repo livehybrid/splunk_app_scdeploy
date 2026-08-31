@@ -71,8 +71,11 @@ jobs:
       - name: Run pytest
         run: |
           poetry run pytest tests/ -v -ra \
+            --splunk-type=external \
             --splunk-host=localhost --splunk-port=8089 \
-            --splunk-hec-port=8088 --splunkweb-port=8000
+            --splunk-user=admin --splunk-password='Chang3d!' \
+            --splunk-hec-port=8088 --splunk-hec-token=abcd1234 \
+            --splunkweb-port=8000
 
       - name: Splunk logs on failure
         if: failure()
