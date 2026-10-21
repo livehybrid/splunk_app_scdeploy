@@ -3,7 +3,6 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 from collections import deque
-from distutils.ccompiler import new_compiler
 import import_declare_test
 
 __author__ = "Will Searle"

@@ -738,6 +738,9 @@
         "version": "2026.01.20",
         "displayName": "SplunkCloud Deployment Manager",
         "schemaVersion": "0.0.10",
+        "supportedPythonVersion": [
+            "3.13"
+        ],
         "os-dependentLibraries": [
             {
                 "name": "cffi",
@@ -772,6 +775,42 @@
                 "os": "linux",
                 "target": "3rdparty/linux/aarch64/python39",
                 "python_version": "39",
+                "dependencies": true,
+                "platform": "manylinux2014_aarch64"
+            },
+            {
+                "name": "cffi",
+                "version": "2.0.0",
+                "os": "linux",
+                "target": "3rdparty/linux/x86_64/python313",
+                "python_version": "313",
+                "dependencies": true,
+                "platform": "manylinux2014_x86_64"
+            },
+            {
+                "name": "pynacl",
+                "version": "1.6.1",
+                "os": "linux",
+                "target": "3rdparty/linux/x86_64/python313",
+                "python_version": "313",
+                "dependencies": true,
+                "platform": "manylinux2014_x86_64"
+            },
+            {
+                "name": "cffi",
+                "version": "2.0.0",
+                "os": "linux",
+                "target": "3rdparty/linux/aarch64/python313",
+                "python_version": "313",
+                "dependencies": true,
+                "platform": "manylinux2014_aarch64"
+            },
+            {
+                "name": "pynacl",
+                "version": "1.6.1",
+                "os": "linux",
+                "target": "3rdparty/linux/aarch64/python313",
+                "python_version": "313",
                 "dependencies": true,
                 "platform": "manylinux2014_aarch64"
             }
