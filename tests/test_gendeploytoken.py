@@ -36,7 +36,23 @@ def _search_messages(splunk, spl):
         return body
 
 
+def _ensure_github_conf(splunk):
+    """A fresh install has no dest_github conf at all, so generate() would stop
+    at a KeyError inside splunklib. One placeholder stanza makes the conf exist,
+    so the command reaches its own destination lookup."""
+    conn = binding.connect(**splunk)
+    try:
+        conn.post(
+            "/servicesNS/nobody/splunk_app_scdeploy/configs/conf-splunk_app_scdeploy_dest_github",
+            name="aios_ci_placeholder",
+        )
+    except binding.HTTPError as e:
+        if e.status != 409:  # already exists from an earlier run
+            raise
+
+
 def test_gendeploytoken_loads_and_reaches_generate(splunk):
+    _ensure_github_conf(splunk)
     text = _search_messages(
         splunk,
         f"| gendeploytoken destination_type=github destination_name={MISSING}",
