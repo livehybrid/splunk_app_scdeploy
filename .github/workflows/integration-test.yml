@@ -109,6 +109,16 @@ jobs:
           acs --version || acs version
 
       - name: Upload to Splunk Cloud via ACS
+        id: acs_upload
+        # KNOWN SPLUNK-SIDE BLOCKER: the shared SCDE install endpoint returns 400
+        # "Failed to decrypt the token" (token state does not replicate across the
+        # hidden SHC members; acs CLI <= 2.25.0 cannot install on SCDE at all).
+        # The working route is the targeted-SH POST in deploy-splunk-app-action
+        # (deploy-scde.yml); this script has not been moved onto it yet. While
+        # vars.SCDE_DEPLOY_ENABLED != 'true' the step is expected-fail so the
+        # nightly reports on everything BEFORE ACS (secrets, build, package).
+        # Setting the variable to true makes this a hard gate again.
+        continue-on-error: ${{ vars.SCDE_DEPLOY_ENABLED != 'true' }}
         env:
           ACS_STACK: ${{ env.ACS_STACK }}
           SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
@@ -134,11 +144,13 @@ jobs:
           scripts/acscli_upload.sh
       
       - name: Wait for app installation
+        if: steps.acs_upload.outcome == 'success'
         run: |
           echo "Waiting for app to be installed..."
           sleep 30
       
       - name: Obtain Splunk token
+        if: steps.acs_upload.outcome == 'success'
         env:
           SPLUNKCLOUD_STACK_URL: ${{ env.SPLUNKCLOUD_STACK_URL }}
           SPLUNK_PORT: '8089'
@@ -148,6 +160,7 @@ jobs:
           echo "SPLUNK_TOKEN=$(python3 scripts/obtain_splunk_token.py --format raw)" >> $GITHUB_ENV
       
       - name: Create test accounts
+        if: steps.acs_upload.outcome == 'success'
         env:
           SPLUNK_HOST: ${{ env.SPLUNKCLOUD_STACK_URL }}
           SPLUNK_PORT: '8089'
@@ -164,6 +177,7 @@ jobs:
             --output test_accounts.json
       
       - name: Configure app destinations
+        if: steps.acs_upload.outcome == 'success'
         env:
           SPLUNK_HOST: ${{ env.SPLUNKCLOUD_STACK_URL }}
           SPLUNK_PORT: '8089'
@@ -193,6 +207,7 @@ jobs:
           }
       
       - name: Generate test tokens
+        if: steps.acs_upload.outcome == 'success'
         env:
           SPLUNK_HOST: ${{ env.SPLUNKCLOUD_STACK_URL }}
           SPLUNK_PORT: '8089'
@@ -209,6 +224,7 @@ jobs:
             --output token_results.json
       
       - name: Validate tokens
+        if: steps.acs_upload.outcome == 'success'
         env:
           GITHUB_REPO: ${{ env.GITHUB_REPO }}
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
@@ -232,6 +248,15 @@ jobs:
             echo "Some validations failed, but this may be expected"
           }
       
+      - name: ACS blocker status
+        if: always()
+        run: |
+          if [ "${{ steps.acs_upload.outcome }}" = "success" ]; then
+            echo "::notice::ACS install succeeded. If SCDE_DEPLOY_ENABLED is still unset, setting it to true restores the hard gate."
+          else
+            echo "::warning::ACS install still blocked (Splunk-side token-decrypt bug, see SCDE-ACS-INSTALL-BLOCKER.md). Everything before the ACS step passed; app-dependent steps were skipped."
+          fi
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7

@@ -20,7 +20,7 @@ six = "^1.17.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"
-pytest-splunk-addon = "*"
+pytest-splunk-addon = "^5.4"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
