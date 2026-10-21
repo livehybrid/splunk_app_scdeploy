@@ -12,13 +12,11 @@ fi
 # Check for authentication credentials
 # ACS can authenticate using either:
 # 1. STACK_USERNAME/STACK_PASSWORD (for Splunk Cloud Platform deployment)
-# 2. SPLUNK_USERNAME/SPLUNK_PASSWORD (for splunk.com account)
-# 3. ACS_TOKEN/STACK_TOKEN (JWT token, if already obtained)
+# 2. ACS_TOKEN/STACK_TOKEN (JWT token, if already obtained)
 if [ -z "$STACK_USERNAME" ] && [ -z "$SPLUNK_USERNAME" ] && [ -z "$ACS_TOKEN" ] && [ -z "$STACK_TOKEN" ]; then
     echo "Error: ACS authentication credentials not set" >&2
     echo "Set one of:" >&2
     echo "  - STACK_USERNAME and STACK_PASSWORD (for Splunk Cloud Platform)" >&2
-    echo "  - SPLUNK_USERNAME and SPLUNK_PASSWORD (for splunk.com account)" >&2
     echo "  - ACS_TOKEN or STACK_TOKEN (JWT token)" >&2
     exit 1
 fi
@@ -48,7 +46,7 @@ acs config add-stack "$ACS_STACK" || {
 acs config use-stack "$ACS_STACK"
 
 echo "Logging into ACS..."
-# ACS login will use STACK_USERNAME/STACK_PASSWORD or SPLUNK_USERNAME/SPLUNK_PASSWORD
+# ACS login will use STACK_USERNAME/STACK_PASSWORD 
 # from environment variables, or ACS_TOKEN if set
 if [ -n "$ACS_TOKEN" ] || [ -n "$STACK_TOKEN" ]; then
     echo "  Using token-based authentication"
@@ -57,25 +55,29 @@ else
     echo "  Using username/password authentication"
     if [ -n "$STACK_USERNAME" ]; then
         echo "    Stack Username: ${STACK_USERNAME}"
-    elif [ -n "$SPLUNK_USERNAME" ]; then
-        echo "    Splunk.com Username: ${SPLUNK_USERNAME}"
+        # TODO: Do ACS login here using username/password
+        acs login --token-user ${STACK_USERNAME} || {
+            echo "Error: Failed to login to ACS" >&2
+            echo "Check your credentials and ensure ACS CLI is properly configured" >&2
+            exit 1
+        }
     fi
 fi
-
-acs login --token-user ${STACK_USERNAME} || {
-    echo "Error: Failed to login to ACS" >&2
-    echo "Check your credentials and ensure ACS CLI is properly configured" >&2
-    exit 1
-}
-
+acs login
 echo "Checking ACS status..."
 acs status current-stack || {
     echo "Error: Failed to get ACS status" >&2
     exit 1
 }
 
-echo "Installing app packages from dist/..."
-if ! acs apps bulk-install private --package-src-dir dist/ --acs-legal-ack=Y; then
+echo "Installing private app from dist/..."
+APP_PKG=$(ls -t dist/*.tar.gz dist/*.tgz 2>/dev/null | head -1)
+if [ -z "$APP_PKG" ]; then
+    echo "Error: no app package (.tar.gz/.tgz) found in dist/" >&2
+    exit 1
+fi
+echo "  Package: $APP_PKG"
+if ! acs apps install private --app-package "$APP_PKG" --acs-legal-ack=Y; then
     echo ""
     echo "Error: Failed to install apps via ACS" >&2
     echo ""
@@ -84,7 +86,7 @@ if ! acs apps bulk-install private --package-src-dir dist/ --acs-legal-ack=Y; th
     ACS_REPORT_DIR="${HOME}/.acs/reports/${ACS_STACK}"
     if [ -d "$ACS_REPORT_DIR" ]; then
         # Find the most recent report file
-        LATEST_REPORT=$(ls -t "${ACS_REPORT_DIR}"/apps_bulk_install_private_*.json 2>/dev/null | head -1)
+        LATEST_REPORT=$(ls -t "${ACS_REPORT_DIR}"/apps_install_private_*.json "${ACS_REPORT_DIR}"/apps_bulk_install_private_*.json 2>/dev/null | head -1)
         if [ -n "$LATEST_REPORT" ] && [ -f "$LATEST_REPORT" ]; then
             echo "=== AppInspect Report ==="
             echo "Report location: $LATEST_REPORT"

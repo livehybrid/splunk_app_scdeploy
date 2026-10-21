@@ -23,8 +23,44 @@ jobs:
         with:
           python-version: "3.9"
 
+  verify-package:
+    name: verify package metadata
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - name: Version carries the commit hash, build is stamped
+        # Reads the tarball itself; the expected version comes from the ref and
+        # git, independently of the shared action's version step.
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF#refs/tags/v}"; else V="1.0.0"; fi
+          export WANT_VERSION="${V}+$(git rev-parse --short HEAD)"
+          python3 - dist/*.tar.gz <<'PY'
+          import configparser, json, os, sys, tarfile
+          want = os.environ["WANT_VERSION"]
+          with tarfile.open(sys.argv[1]) as tar:
+              print("tarball root:", sorted({n.split("/")[0] for n in tar.getnames()}))
+              raw = tar.extractfile("splunk_app_scdeploy/default/app.conf").read().decode()
+              manifest = json.load(tar.extractfile("splunk_app_scdeploy/app.manifest"))
+          conf = configparser.ConfigParser(interpolation=None, strict=False)
+          conf.read_string(raw)
+          got = {"launcher.version": conf.get("launcher", "version", fallback=None),
+                 "id.version": conf.get("id", "version", fallback=None),
+                 "app.manifest": manifest["info"]["id"]["version"]}
+          build = conf.get("install", "build", fallback="")
+          print(got, "build", build)
+          bad = [k for k, v in got.items() if v != want]
+          if bad or not build.isdigit():
+              sys.exit(f"package metadata is wrong for {want}: {bad or 'no numeric [install] build'}")
+          PY
+
   pytest-integration:
-    name: pytest (splunk-docker)
+    name: pytest (splunk ${{ matrix.splunk }})
     # The repo has carried a pytest-splunk-addon suite since the cicd-template
     # days but it never ran in GitHub CI (only the GitLab-shaped ci-up.sh flow).
     # This job runs it against the repo's own docker Splunk with fixed port
@@ -32,16 +68,32 @@ jobs:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # 10.0 runs the custom command on Python 3.9, 10.2 and 10.6 on Python
+        # 3.13 (commands.conf python.required = 3.13).
+        splunk: ["10.0", "10.2", "10.6.0"]
+        include:
+          # test_splunk_internal_errors only filters noise known to 10.2. On
+          # 10.0 and 10.6 Splunk's own apps log platform errors (KV store
+          # password-store ACL, LspConnectionManager) that are not this app's,
+          # so the check runs on the 10.2 leg only.
+          - splunk: "10.0"
+            pytest_extra: "--deselect tests/test_addon.py::Test_App::test_splunk_internal_errors"
+          - splunk: "10.6.0"
+            pytest_extra: "--deselect tests/test_addon.py::Test_App::test_splunk_internal_errors"
     env:
       APP_ID: splunk_app_scdeploy
+      SPLUNK_VERSION: ${{ matrix.splunk }}
     steps:
       - name: Checkout code (with submodules)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.9'
           cache: 'pip'
@@ -80,7 +132,7 @@ jobs:
             --splunk-host=localhost --splunk-port=8089 \
             --splunk-user=admin --splunk-password='Chang3d!' \
             --splunk-hec-port=8088 --splunk-hec-token=abcd1234 \
-            --splunkweb-port=8000
+            --splunkweb-port=8000 ${{ matrix.pytest_extra }}
 
       - name: Splunk logs on failure
         if: failure()
@@ -113,5 +165,6 @@ jobs:
       contents: write
     needs:
       - appinspect
+      - verify-package
       - pytest-integration
     uses: livehybrid/deploy-splunk-app-action/.github/workflows/publish.yml@main

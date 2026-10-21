@@ -67,6 +67,16 @@ if [ -z "$OP_SERVICE_ACCOUNT_TOKEN" ]; then
     exit 1
 fi
 
+# Resolve the vault NAME to its UUID ONCE. Subsequent `op item get --vault <uuid>` calls
+# then skip per-call vault-name resolution, cutting the 1Password requests per run.
+# Falls back to the name if resolution fails, so this is safe.
+if command -v op >/dev/null 2>&1; then
+    _VAULT_UUID=$(op vault get "$VAULT_NAME" --format json 2>/dev/null | python3 -c "import sys, json; print(json.load(sys.stdin).get('id', ''))" 2>/dev/null || echo "")
+    if [ -n "$_VAULT_UUID" ]; then
+        VAULT_NAME="$_VAULT_UUID"
+    fi
+fi
+
 # Function to retrieve secret from 1Password
 # Use the cached path to avoid multiple permission prompts
 get_op_secret() {
@@ -118,18 +128,25 @@ fi
 if [ "$IS_SOURCED" = true ]; then
     echo "Retrieving Splunkbase credentials..." >&2
 fi
-# Try to get username and password individually since URL field may not exist
-SPLUNKBASE_USERNAME=$(get_op_secret "splunkbase-credentials" "username" 2>/dev/null || echo "")
-SPLUNKBASE_PASSWORD=$(get_op_secret "splunkbase-credentials" "password" 2>/dev/null || echo "")
+# Single fetch (was 2 separate per-field op calls)
+SPLUNKBASE_RESULT=$(get_op_login "splunkbase-credentials")
+if [ -n "$SPLUNKBASE_RESULT" ] && [ "$SPLUNKBASE_RESULT" != "{}" ]; then
+    eval $(echo "$SPLUNKBASE_RESULT" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(f'export SPLUNKBASE_USERNAME=\"{data.get(\"username\", \"\")}\"')
+    print(f'export SPLUNKBASE_PASSWORD=\"{data.get(\"password\", \"\")}\"')
+except Exception:
+    pass
+")
+fi
 
 if [ -n "$SPLUNKBASE_USERNAME" ] && [ -n "$SPLUNKBASE_PASSWORD" ]; then
-    export SPLUNKBASE_USERNAME="$SPLUNKBASE_USERNAME"
-    export SPLUNKBASE_PASSWORD="$SPLUNKBASE_PASSWORD"
-    
     # Also set SPLUNK_USERNAME/SPLUNK_PASSWORD for ACS authentication (splunk.com account)
     export SPLUNK_USERNAME="$SPLUNKBASE_USERNAME"
     export SPLUNK_PASSWORD="$SPLUNKBASE_PASSWORD"
-    
+
     # Create base64 auth for Splunkbase API
     export SPLUNKBASE_AUTH=$(echo -n "${SPLUNKBASE_USERNAME}:${SPLUNKBASE_PASSWORD}" | base64)
 else
@@ -138,90 +155,86 @@ else
     fi
 fi
 
-# Retrieve GitHub test repo credentials (optional)
-GITHUB_CHECK=$(get_op_secret "github-test-repo" "password" 2>/dev/null)
-if [ -n "$GITHUB_CHECK" ]; then
+# Retrieve GitHub test repo credentials (optional, single fetch — was CHECK + DATA)
+GITHUB_DATA=$(get_op_login "github-test-repo")
+if [ -n "$GITHUB_DATA" ] && [ "$GITHUB_DATA" != "{}" ]; then
     if [ "$IS_SOURCED" = true ]; then
         echo "Retrieving GitHub test repo credentials..." >&2
     fi
-    GITHUB_DATA=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "github-test-repo" || echo "{}")
-    if [ -n "$GITHUB_DATA" ] && [ "$GITHUB_DATA" != "{}" ]; then
-        eval $(echo "$GITHUB_DATA" | python3 -c "
+    eval $(echo "$GITHUB_DATA" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
-    print(f'export GITHUB_TOKEN=\"{data.get(\"password\", \"\")}\"')
-    print(f'export GITHUB_REPO=\"{data.get(\"url\", \"\")}\"')
+    if data.get('password'):
+        print(f'export GITHUB_TOKEN=\"{data.get(\"password\", \"\")}\"')
+        print(f'export GITHUB_REPO=\"{data.get(\"url\", \"\")}\"')
 except:
     pass
 ")
-    fi
 fi
 
-# Retrieve GitLab test project credentials (optional)
-GITLAB_CHECK=$(get_op_secret "gitlab-test-project" "password" 2>/dev/null)
-if [ -n "$GITLAB_CHECK" ]; then
+# Retrieve GitLab test project credentials (optional, single fetch — was CHECK + DATA)
+GITLAB_DATA=$(get_op_login "gitlab-test-project")
+if [ -n "$GITLAB_DATA" ] && [ "$GITLAB_DATA" != "{}" ]; then
     if [ "$IS_SOURCED" = true ]; then
         echo "Retrieving GitLab test project credentials..." >&2
     fi
-    GITLAB_DATA=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "gitlab-test-project" || echo "{}")
-    if [ -n "$GITLAB_DATA" ] && [ "$GITLAB_DATA" != "{}" ]; then
-        eval $(echo "$GITLAB_DATA" | python3 -c "
+    eval $(echo "$GITLAB_DATA" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
-    print(f'export GITLAB_TOKEN=\"{data.get(\"password\", \"\")}\"')
-    print(f'export GITLAB_PROJECT_URL=\"{data.get(\"url\", \"\")}\"')
+    if data.get('password'):
+        print(f'export GITLAB_TOKEN=\"{data.get(\"password\", \"\")}\"')
+        print(f'export GITLAB_PROJECT_URL=\"{data.get(\"url\", \"\")}\"')
 except:
     pass
 ")
-    fi
 fi
 
-# Retrieve 1Password Connect server URL (optional; required for 1Password destination in Splunk)
-OP_CONNECT_CHECK=$(get_op_secret "1password-connect" "url" 2>/dev/null)
-if [ -n "$OP_CONNECT_CHECK" ]; then
-    if [ "$IS_SOURCED" = true ]; then
-        echo "Retrieving 1Password Connect URL..." >&2
-    fi
-    export OP_CONNECT_HOST="$OP_CONNECT_CHECK"
-    OP_CONNECT_TOKEN=$(get_op_secret "1password-connect" "password" 2>/dev/null)
-    if [ -n "$OP_CONNECT_TOKEN" ]; then
-        export OP_CONNECT_TOKEN="$OP_CONNECT_TOKEN"
-    fi
-fi
-
-# Retrieve AWS Secrets Manager credentials (optional)
-AWS_CHECK=$(get_op_secret "aws-secrets-manager" "username" 2>/dev/null)
-if [ -n "$AWS_CHECK" ]; then
-    if [ "$IS_SOURCED" = true ]; then
-        echo "Retrieving AWS Secrets Manager credentials..." >&2
-    fi
-    AWS_DATA=$(python3 "$OP_CLIENT_PATH" "$VAULT_NAME" "aws-secrets-manager" || echo "{}")
-    if [ -n "$AWS_DATA" ] && [ "$AWS_DATA" != "{}" ]; then
-        # Single Python call to parse all AWS fields including secretpath
-        eval $(echo "$AWS_DATA" | python3 -c "
+# Retrieve 1Password Connect server (optional; for the in-Splunk 1Password destination — single fetch)
+OPCONNECT_DATA=$(get_op_login "1password-connect")
+if [ -n "$OPCONNECT_DATA" ] && [ "$OPCONNECT_DATA" != "{}" ]; then
+    eval $(echo "$OPCONNECT_DATA" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
-    print(f'export AWS_ACCESS_KEY_ID=\"{data.get(\"username\", \"\")}\"')
-    print(f'export AWS_SECRET_ACCESS_KEY=\"{data.get(\"password\", \"\")}\"')
-    print(f'export AWS_DEFAULT_REGION=\"{data.get(\"url\", \"\")}\"')
-    # Try to get secretpath from fields
-    secret_name = 'splunk/test-token'
-    for field in data.get('fields', []):
-        field_id = field.get('id', '').lower()
-        field_label = field.get('label', '').lower()
-        if 'secretpath' in field_id or 'secretpath' in field_label:
-            secret_name = field.get('value', 'splunk/test-token')
-            break
-        elif 'secret_name' in field_id or 'secret_name' in field_label:
-            secret_name = field.get('value', 'splunk/test-token')
-            break
-    print(f'export AWS_SECRET_NAME=\"{secret_name}\"')
+    if data.get('url'):
+        print(f'export OP_CONNECT_HOST=\"{data.get(\"url\", \"\")}\"')
+        if data.get('password'):
+            print(f'export OP_CONNECT_TOKEN=\"{data.get(\"password\", \"\")}\"')
+except:
+    pass
+")
+    if [ -n "$OP_CONNECT_HOST" ] && [ "$IS_SOURCED" = true ]; then
+        echo "Retrieving 1Password Connect URL..." >&2
+    fi
+fi
+
+# Retrieve AWS Secrets Manager credentials (optional, single fetch — was CHECK + DATA)
+AWS_DATA=$(get_op_login "aws-secrets-manager")
+if [ -n "$AWS_DATA" ] && [ "$AWS_DATA" != "{}" ]; then
+    eval $(echo "$AWS_DATA" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    if data.get('username'):
+        print(f'export AWS_ACCESS_KEY_ID=\"{data.get(\"username\", \"\")}\"')
+        print(f'export AWS_SECRET_ACCESS_KEY=\"{data.get(\"password\", \"\")}\"')
+        print(f'export AWS_DEFAULT_REGION=\"{data.get(\"url\", \"\")}\"')
+        # secretpath from custom fields (get_login_item returns no 'fields', so this defaults)
+        secret_name = 'splunk/test-token'
+        for field in data.get('fields', []):
+            field_id = (field.get('id') or '').lower()
+            field_label = (field.get('label') or '').lower()
+            if 'secretpath' in field_id or 'secretpath' in field_label or 'secret_name' in field_id or 'secret_name' in field_label:
+                secret_name = field.get('value', 'splunk/test-token')
+                break
+        print(f'export AWS_SECRET_NAME=\"{secret_name}\"')
 except:
     print('export AWS_SECRET_NAME=\"splunk/test-token\"')
 ")
+    if [ -n "$AWS_ACCESS_KEY_ID" ] && [ "$IS_SOURCED" = true ]; then
+        echo "Retrieving AWS Secrets Manager credentials..." >&2
     fi
 fi
 

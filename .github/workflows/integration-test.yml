@@ -22,10 +22,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.9'
           cache: 'pip'
@@ -110,28 +110,33 @@ jobs:
 
       - name: Upload to Splunk Cloud via ACS
         id: acs_upload
-        # KNOWN SPLUNK-SIDE BLOCKER: ACS app-install returns 400 "Failed to
-        # decrypt the token" for every token class (evidence pack:
-        # data/splunkbase-maintenance/SCDE-ACS-INSTALL-BLOCKER.md, support case
-        # via handoff #33). While vars.SCDE_DEPLOY_ENABLED != 'true' the step
-        # is expected-fail so the nightly reports on everything BEFORE ACS
-        # (secrets, build, package) instead of drowning in known-red. Flip the
-        # repo variable to true when Splunk fix it and this becomes a hard
-        # gate again with zero edits.
+        # KNOWN SPLUNK-SIDE BLOCKER: the shared SCDE install endpoint returns 400
+        # "Failed to decrypt the token" (token state does not replicate across the
+        # hidden SHC members; acs CLI <= 2.25.0 cannot install on SCDE at all).
+        # The working route is the targeted-SH POST in deploy-splunk-app-action
+        # (deploy-scde.yml); this script has not been moved onto it yet. While
+        # vars.SCDE_DEPLOY_ENABLED != 'true' the step is expected-fail so the
+        # nightly reports on everything BEFORE ACS (secrets, build, package).
+        # Setting the variable to true makes this a hard gate again.
         continue-on-error: ${{ vars.SCDE_DEPLOY_ENABLED != 'true' }}
         env:
           ACS_STACK: ${{ env.ACS_STACK }}
           SPLUNKCLOUD_ADMIN_USER: ${{ env.SPLUNKCLOUD_ADMIN_USER }}
           SPLUNKCLOUD_ADMIN_PASSWORD: ${{ env.SPLUNKCLOUD_ADMIN_PASSWORD }}
           SPLUNKBASE_TOKEN: ${{ env.SPLUNKBASE_AUTH }}
+          # splunk.com creds for the private-app AppInspect auth (acs apps bulk-install private),
+          # else acs prompts for them and fails with EOF in CI.
+          SPLUNK_USERNAME: ${{ env.SPLUNKBASE_USERNAME }}
+          SPLUNK_PASSWORD: ${{ env.SPLUNKBASE_PASSWORD }}
         run: |
-          # Get ACS token using admin credentials
-          export ACS_TOKEN=$(curl -k -s -u "${SPLUNKCLOUD_ADMIN_USER}:${SPLUNKCLOUD_ADMIN_PASSWORD}" \
-            "https://${SPLUNKCLOUD_STACK_URL}:8089/services/auth/login" \
-            -d "username=${SPLUNKCLOUD_ADMIN_USER}&password=${SPLUNKCLOUD_ADMIN_PASSWORD}" \
-            | grep -oP '(?<=<sessionKey>)[^<]+')
-          
-          # Mask the session token (derived at runtime, not from 1Password -> not auto-masked)
+          # ACS needs a token minted via ITS OWN endpoint (admin.splunk.com/.../adminconfig/v2/tokens),
+          # NOT the stack's :8089 /services/authorization/tokens/create. Stack tokens are scoped to the
+          # instance, so ACS rejects them at the apps endpoint with "Failed to decrypt the token".
+          export ACS_TOKEN=$(curl -sS -u "${SPLUNKCLOUD_ADMIN_USER}:${SPLUNKCLOUD_ADMIN_PASSWORD}" \
+            -X POST "https://admin.splunk.com/${ACS_STACK}/adminconfig/v2/tokens" \
+            --header 'Content-Type: application/json' \
+            --data-raw "{\"user\":\"${SPLUNKCLOUD_ADMIN_USER}\",\"audience\":\"acs-cicd\",\"expiresOn\":\"+1d\"}" \
+            | python3 -c "import sys, json; print(json.load(sys.stdin).get('token', ''))")
           echo "::add-mask::${ACS_TOKEN}"
           export STACK_TOKEN="$ACS_TOKEN"
           export STACK_USERNAME="${SPLUNKCLOUD_ADMIN_USER}"
@@ -247,14 +252,14 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.acs_upload.outcome }}" = "success" ]; then
-            echo "::notice::ACS install succeeded — if SCDE_DEPLOY_ENABLED is still unset, flip it to true to restore the hard gate."
+            echo "::notice::ACS install succeeded. If SCDE_DEPLOY_ENABLED is still unset, setting it to true restores the hard gate."
           else
-            echo "::warning::ACS install still blocked by the Splunk-side token-decrypt bug (support case, handoff #33). Everything before the ACS step passed; app-dependent steps were skipped."
+            echo "::warning::ACS install still blocked (Splunk-side token-decrypt bug, see SCDE-ACS-INSTALL-BLOCKER.md). Everything before the ACS step passed; app-dependent steps were skipped."
           fi
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: |
