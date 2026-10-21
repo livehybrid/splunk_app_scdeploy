@@ -1,8 +1,8 @@
 version: 2
 updates:
   - package-ecosystem: "pip"
-    target-branch: "develop"
-    directories: 
+    target-branch: "main"
+    directories:
       - "/"
       - "/package/lib/"
     schedule:
@@ -11,9 +11,18 @@ updates:
       splunk:
         applies-to: version-updates
         patterns:
-        - "splunk*"
+          - "splunk*"
+    open-pull-requests-limit: 10
+    ignore:
+      # Splunk 10.1 and lower run add-ons on py3.9: splunk-sdk 3.x is py3.13-only and
+      # requests >=2.33 drops py3.9. These majors are rejected on purpose;
+      # lift the caps only when Splunk 10.1 and lower are dropped.
+      - dependency-name: "splunk-sdk"
+        versions: [">=3.0.0"]
+      - dependency-name: "requests"
+        versions: [">=2.33.0"]
   - package-ecosystem: "github-actions"
-    target-branch: "develop"
+    target-branch: "main"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
