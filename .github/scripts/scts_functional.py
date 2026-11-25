@@ -124,6 +124,18 @@ class Ctx:
         raw = json.dumps(data) if not isinstance(data, str) else data
         return status, data, raw
 
+    def search_settled(self, spl: str) -> Tuple[int, Any, str]:
+        """A destination written through one search head member reaches the
+        others by replication, so a search on another member can briefly miss
+        it. Retry only that specific miss, which happens before any token is
+        minted."""
+        for _ in range(12):
+            status, data, raw = self.search(spl)
+            if "Cannot find destination_name" not in raw:
+                break
+            time.sleep(10)
+        return status, data, raw
+
     def tokens(self) -> List[Dict[str, Any]]:
         status, data = self.rest("GET", "/services/authorization/tokens?count=0")
         require(status == 200, "token list answered HTTP {}".format(status))
@@ -135,7 +147,8 @@ class Ctx:
 
     def upsert(self, endpoint: str, name: str, fields: Dict[str, str]) -> None:
         status, data = self.rest("POST", self.ns(endpoint), dict(fields, name=name))
-        if status == 409 or (status == 400 and "already" in json.dumps(data)):
+        # UCC wraps the 409 for an existing name in a 500.
+        if status == 409 or "already in use" in json.dumps(data):
             status, data = self.rest("POST", self.ns("{}/{}".format(endpoint, name)), fields)
         require(status in (200, 201), "{} {} answered HTTP {}: {}".format(
             endpoint, name, status, _messages(data)))
@@ -186,24 +199,37 @@ def _missing(c: Ctx) -> None:
 
 
 def _receiver_userinfo(c: Ctx) -> str:
-    """userinfo for the loopback receiver: a throwaway user, else the admin."""
+    """userinfo for the loopback receiver: a fresh throwaway user per run.
+
+    A fresh user, because changing an existing user's password reaches the
+    other search head members by replication, and a delivery landing on a
+    member that has not caught up answers 401. Waits until the user
+    authenticates on several load-balanced requests in a row.
+    """
     if "rcv_userinfo" in c.state:
         return c.state["rcv_userinfo"]
-    name = "scdeploy_ci_rcv"
-    pw = c.secret("Rc" + secrets.token_urlsafe(18).replace("-", "x").replace("_", "y") + "9!")
+    role = "scdeploy_ci_rcv"
+    name = "scdeploy_ci_rcv_" + c.tag.lower()
+    pw = c.secret("Rc" + secrets.token_hex(16) + "x9")
     c.rest("POST", "/services/authorization/roles", {
-        "name": "scdeploy_ci_rcv", "capabilities": ["edit_tcp"], "srchIndexesAllowed": "main"})
+        "name": role, "capabilities": ["edit_tcp"], "srchIndexesAllowed": "main"})
     status, _ = c.rest("POST", "/services/authentication/users",
-                       {"name": name, "password": pw, "roles": "scdeploy_ci_rcv",
-                        "force-change-pass": "0"})
-    if status == 409 or status == 400:
-        status, _ = c.rest("POST", "/services/authentication/users/" + name,
-                           {"password": pw, "roles": "scdeploy_ci_rcv", "force-change-pass": "0"})
-    if status in (200, 201):
-        user, password = name, pw
-    else:
+                       {"name": name, "password": pw, "roles": role, "force-change-pass": "0"})
+    user, password = name, pw
+    if status not in (200, 201):
         scts.log("Could not create a receiver user (HTTP {}); using the stack admin.".format(status))
         user, password = c.user, c.password
+    else:
+        auth = "Basic " + base64.b64encode("{}:{}".format(user, password).encode()).decode()
+        good = 0
+        for _ in range(40):
+            st, _r, _h = scts._request("GET", c.mgmt + "/services/authentication/current-context",
+                                       {"Authorization": auth}, timeout=60, context=c.ctx)
+            good = good + 1 if st == 200 else 0
+            if good >= 6:
+                break
+            time.sleep(3)
+        require(good >= 6, "the receiver user never authenticated consistently")
     info = "{}:{}".format(urllib.parse.quote(user, safe=""), urllib.parse.quote(password, safe=""))
     c.secret(urllib.parse.quote(password, safe=""))
     c.state["rcv_userinfo"] = info
@@ -215,15 +241,21 @@ def _deliver(c: Ctx) -> None:
     sourcetype = "scdeploy_ci_" + c.tag
     aud = "scdeployci_" + c.tag
     c.state["aud"] = aud
+    # The stack cannot reach its own public load balancer (the connection
+    # hairpins and times out), but a member's own FQDN works and its
+    # certificate (*.<stack>.splunkcloud.com) verifies.
+    status, info = c.rest("GET", "/services/server/info")
+    require(status == 200, "server/info answered HTTP {}".format(status))
+    member = info["entry"][0]["content"]["serverName"]
     hostname = "{}@{}:8089/services/receivers/simple?index=main&sourcetype={}&source=scts#".format(
-        _receiver_userinfo(c), c.host, sourcetype)
+        _receiver_userinfo(c), member, sourcetype)
     # The destination names the user, the SPL names another: the destination wins.
     roles = c.state.setdefault("my_roles", _my_roles(c))
     c.upsert("{}_dest_gitlab".format(APP), "ci_deliver", {
         "hostname": hostname, "token": c.secret("glpat-ci-" + secrets.token_hex(8)),
         "projectid": "1", "user": c.user, "limit_role": "|".join(roles),
     })
-    status, data, raw = c.search(
+    status, data, raw = c.search_settled(
         "| gendeploytoken destination_type=gitlab destination_name=ci_deliver "
         "user=scdeploy_ci_not_this_user audience={} expires_on=+20m".format(aud))
     c.state["deliver_raw"] = raw
@@ -315,7 +347,7 @@ def _refuse(c: Ctx) -> None:
         "hostname": "gitlab.invalid", "token": c.secret("glpat-ci-" + secrets.token_hex(8)),
         "projectid": "1", "limit_role": "scdeploy_ci_no_such_role",
     })
-    status, data, raw = c.search(
+    status, data, raw = c.search_settled(
         "| gendeploytoken destination_type=gitlab destination_name=ci_denied "
         "user={} audience={}".format(c.user, aud))
     require("Unauthorised to run" in raw, "a caller outside limit_role was not refused: {}".format(
@@ -338,7 +370,7 @@ def _cleaner(c: Ctx) -> None:
         ids[label] = content["id"]
     time.sleep(15)
     c.upsert("{}_token_cleaner".format(APP), "ci_cleaner", {
-        "min_expiry": "0", "interval": "20", "limit": "10", "disabled": "0"})
+        "min_expiry": "0", "interval": "20", "limit": "10"})
     remaining = set()
     deadline = time.time() + 300
     while time.time() < deadline:
@@ -346,7 +378,7 @@ def _cleaner(c: Ctx) -> None:
         if ids["expired1"] not in remaining and ids["expired2"] not in remaining:
             break
         time.sleep(15)
-    c.rest("POST", c.ns("{}_token_cleaner/ci_cleaner".format(APP)), {"disabled": "1"})
+    c.rest("DELETE", c.ns("{}_token_cleaner/ci_cleaner".format(APP)))
     require(ids["expired1"] not in remaining and ids["expired2"] not in remaining,
             "expired tokens were not removed within 5 minutes")
     require(ids["live"] in remaining, "the cleaner removed a token that has not expired")
@@ -368,6 +400,11 @@ def main() -> int:
     if not access:
         scts.fail("Stack {} has no access details (state {}).".format(args.stack_id, detail.get("state")))
     c = Ctx(access, "".join(ch for ch in args.tag if ch.isalnum()))
+
+    # The app mints Splunk auth tokens, which SCTS stacks ship with switched
+    # off. A customer turns them on to use the app at all; do the same.
+    status, _ = c.rest("POST", "/services/admin/token-auth/tokens_auth", {"disabled": "false"})
+    scts.log("Token authentication enabled (HTTP {}).".format(status))
 
     only = {x for x in args.only.split(",") if x}
     failed: List[str] = []

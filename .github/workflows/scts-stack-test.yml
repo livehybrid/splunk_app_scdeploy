@@ -112,6 +112,7 @@ jobs:
         run: python3 .github/scripts/scts.py wait "${{ steps.stack.outputs.stack_id }}" --timeout 7800 --interval 30
 
       - name: Probe ACS against the stack
+        id: acs
         # Informational: scdeploy deploys via ACS on real customer stacks.
         continue-on-error: true
         shell: bash
@@ -130,46 +131,18 @@ jobs:
         shell: bash
         run: python3 .github/scripts/scts_functional.py "${{ steps.stack.outputs.stack_id }}" --tag "r${{ github.run_id }}a${{ github.run_attempt }}"
 
-      - name: Build a mutant (delivered token corrupted)
-        id: mutant
-        shell: bash
-        run: |
-          WORK=$(mktemp -d)
-          tar -xzf "${{ steps.pkg.outputs.package }}" -C "$WORK"
-          F="$WORK/${APP_ID}/bin/gendeploytoken.py"
-          python3 - "$F" "$WORK/${APP_ID}" "${{ steps.pkg.outputs.version }}" <<'PY'
-          import json, re, sys
-          path, root, version = sys.argv[1:]
-          src = open(path).read()
-          old = '"token": tokenObj["token"],'
-          assert src.count(old) == 1, "mutation site not found"
-          open(path, "w").write(src.replace(old, '"token": tokenObj["token"][::-1],'))
-          mv = version + ".mutant"
-          conf = root + "/default/app.conf"
-          c = open(conf).read()
-          c2 = c.replace("version = " + version, "version = " + mv)
-          assert c2 != c, "version not found in app.conf"
-          open(conf, "w").write(c2)
-          man = root + "/app.manifest"
-          m = json.load(open(man)); m["info"]["id"]["version"] = mv
-          json.dump(m, open(man, "w"), indent=2)
-          print(mv)
-          PY
-          MV="${{ steps.pkg.outputs.version }}.mutant"
-          tar -czf "$RUNNER_TEMP/${APP_ID}-mutant.tar.gz" -C "$WORK" "${APP_ID}"
-          echo "package=$RUNNER_TEMP/${APP_ID}-mutant.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "version=$MV" >> "$GITHUB_OUTPUT"
-
+      # The guard on the guard: a build whose delivered token is corrupted
+      # must turn exactly one check red (delivered_token_authenticates). If a
+      # different set fails, a check is blind or over-broad, and the run fails.
       - name: Mutant self-test (the checks must go red)
         shell: bash
         run: |
+          MP="$RUNNER_TEMP/${APP_ID}-mutant.tar.gz"
+          MV=$(python3 .github/scripts/make_mutant.py "${{ steps.pkg.outputs.package }}" "${{ steps.pkg.outputs.version }}" "$MP")
           python3 .github/scripts/scts.py install "${{ steps.stack.outputs.stack_id }}" \
-            --package "${{ steps.mutant.outputs.package }}" \
-            --app-name "${APP_ID}" \
-            --expect-version "${{ steps.mutant.outputs.version }}"
+            --package "$MP" --app-name "${APP_ID}" --expect-version "$MV"
           python3 .github/scripts/scts_functional.py "${{ steps.stack.outputs.stack_id }}" \
             --tag "m${{ github.run_id }}a${{ github.run_attempt }}" \
-            --only command_mints_and_delivers,minted_token_listed_for_user,delivered_payload_shape,delivered_token_authenticates,output_never_contains_token \
             --expect-fail delivered_token_authenticates
 
       - name: Delete the stack
@@ -190,4 +163,5 @@ jobs:
             echo "| Splunk | ${{ steps.wait.outputs.splunk_version }} |"
             echo "| Built | \`${{ steps.pkg.outputs.version }}\` |"
             echo "| On stack | \`${{ steps.install.outputs.installed_version }}\` |"
+            echo "| ACS answers (apps list) | ${{ steps.acs.outputs.acs_ok }} |"
           } >> "$GITHUB_STEP_SUMMARY"

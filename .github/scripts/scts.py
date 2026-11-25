@@ -478,42 +478,98 @@ class Stack:
             if parsed.get("status") == "ERROR" or parsed.get("messages") or parsed.get("error"):
                 fail("Lookup upload failed: {}".format(text[:300]))
 
-        status, data = self.mgmt("GET", "/servicesNS/-/-/data/lookup-table-files/{}".format(
-            urllib.parse.quote(name)))
-        if status != 200:
-            fail("Uploaded file {} did not read back (HTTP {}).".format(name, status))
-        server_path = data["entry"][0]["content"].get("eai:data", "")
-        if not server_path:
-            fail("No eai:data path for the uploaded file.")
-        log("Package landed at {}".format(server_path))
-        status, data = self.mgmt("POST", "/services/apps/local", {
-            "name": server_path, "filename": "true", "update": "true"}, timeout=600)
-        if status not in (200, 201):
-            msgs = data.get("messages") if isinstance(data, dict) else data
-            fail("apps/local install from {} failed (HTTP {}): {}".format(
-                server_path, status, str(msgs)[:300]))
-        log("Installed {} from the uploaded package (HTTP {}).".format(app_name, status))
+        log("Uploaded {} through the lookup uploader.".format(name))
+        self.install_from_lookup_on_every_member(name, app_name)
+
+    # -- search head cluster ----------------------------------------------
+    #
+    # An SCTS stack is a hidden three-member search head cluster behind one
+    # load-balanced hostname (serverName changes between requests). apps/local
+    # installs on the member that answers, and apps do not replicate between
+    # members, so a single install leaves the app on one member in three and
+    # every check becomes a lottery. The load balancer honours its AWSALB
+    # cookie on :8089, so a cookie jar pins requests to one member; lookup files
+    # DO replicate, so each member can install from the same uploaded file.
+
+    def _member_opener(self, label: str, tries: int = 40):
+        for _ in range(tries):
+            jar = http.cookiejar.CookieJar()
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(jar),
+                urllib.request.HTTPSHandler(context=self._ctx),
+            )
+            status, data = self._pinned(opener, "GET", "/services/server/info")
+            if status == 200 and data["entry"][0]["content"].get("serverName") == label:
+                return opener
+        fail("Could not pin a connection to member {}.".format(label))
+
+    def _pinned(self, opener, method: str, path: str,
+                data: Optional[Dict[str, str]] = None, timeout: float = 120) -> Tuple[int, Any]:
+        url = self.mgmt_url + path
+        url += ("&" if "?" in url else "?") + "output_mode=json"
+        body = urllib.parse.urlencode(data).encode("utf-8") if data is not None else None
+        request = urllib.request.Request(url, data=body, method=method)
+        request.add_header("Authorization", _basic_auth(self.username, self.password))
+        request.add_header("User-Agent", "scts.py")
+        try:
+            with opener.open(request, timeout=timeout) as resp:
+                status, raw = resp.status, resp.read()
+        except urllib.error.HTTPError as exc:
+            status, raw = exc.code, exc.read()
+        try:
+            return status, json.loads(raw.decode("utf-8")) if raw else None
+        except ValueError:
+            return status, raw.decode("utf-8", "replace")
+
+    def members(self) -> list:
+        status, data = self.mgmt("GET", "/services/shcluster/member/members?count=0")
+        if status == 200 and data.get("entry"):
+            return sorted(e["content"]["label"] for e in data["entry"])
+        status, data = self.mgmt("GET", "/services/server/info")
+        return [data["entry"][0]["content"]["serverName"]]
+
+    def install_from_lookup_on_every_member(self, name: str, app_name: str) -> None:
+        members = self.members()
+        log("Search head members: {}".format(len(members)))
+        for label in members:
+            opener = self._member_opener(label)
+            server_path = ""
+            for _ in range(40):
+                status, data = self._pinned(
+                    opener, "GET", "/servicesNS/-/-/data/lookup-table-files/{}".format(
+                        urllib.parse.quote(name)))
+                if status == 200:
+                    server_path = data["entry"][0]["content"].get("eai:data", "")
+                    break
+                time.sleep(15)
+            if not server_path:
+                fail("The uploaded package never replicated to {}.".format(label))
+            status, data = self._pinned(opener, "POST", "/services/apps/local", {
+                "name": server_path, "filename": "true", "update": "true"}, timeout=600)
+            if status not in (200, 201):
+                msgs = data.get("messages") if isinstance(data, dict) else data
+                fail("apps/local install on {} failed (HTTP {}): {}".format(
+                    label, status, str(msgs)[:300]))
+            log("Installed {} on {} (HTTP {}).".format(app_name, label.split(".")[0], status))
+
+    def member_versions(self, app_name: str) -> Dict[str, Optional[str]]:
+        out: Dict[str, Optional[str]] = {}
+        for label in self.members():
+            opener = self._member_opener(label)
+            status, data = self._pinned(opener, "GET", "/servicesNS/nobody/system/apps/local/{}".format(
+                urllib.parse.quote(app_name)))
+            out[label.split(".")[0]] = (
+                data["entry"][0]["content"].get("version") if status == 200 else None)
+        return out
 
     def install(self, package_path: str, app_name: str) -> None:
-        """App uploader where it still exists, the lookup route where it does not."""
-        probe = self._opener.open
-        try:
-            self._web_login()
-            status = probe(self.web_url + "/en-US/manager/appinstall/_upload", timeout=60).status
-        except urllib.error.HTTPError as exc:
-            status = exc.code
-        if status == 200:
-            log("App uploader answers 200; trying it first.")
-            try:
-                self.install_via_web(package_path)
-                return
-            except SystemExit:
-                log("App uploader failed; falling back to the lookup route.")
-        else:
-            log("App uploader answers HTTP {}; using the lookup route.".format(status))
+        """The lookup route. The app uploader page still renders (GET 200) on
+        Cloud 10.8 but its POST answers 404, so probing it proves nothing."""
         self.install_via_lookup(package_path, app_name)
 
     def mint_token(self, audience: str, expires_on: str = "+30m") -> str:
+        # SCTS stacks ship with token authentication off.
+        self.mgmt("POST", "/services/admin/token-auth/tokens_auth", {"disabled": "false"})
         status, data = self.mgmt("POST", "/services/authorization/tokens/create", {
             "name": self.username, "audience": audience, "expires_on": expires_on})
         if status not in (200, 201):
@@ -719,9 +775,13 @@ def cmd_install(args: argparse.Namespace) -> None:
     if args.app_name:
         version = None
         for _ in range(12):
-            version = stack.installed_version(args.app_name)
+            versions = stack.member_versions(args.app_name)
+            log("Version per member: {}".format(versions))
+            distinct = set(versions.values())
+            version = distinct.pop() if len(distinct) == 1 else None
             if version and (not args.expect_version or version == args.expect_version):
                 break
+            version = None
             time.sleep(15)
         if version:
             log("Verified: {} is installed at version {}".format(args.app_name, version))
@@ -786,7 +846,8 @@ def cmd_acs_probe(args: argparse.Namespace) -> None:
             results["{}{}".format(name, path)] = code
             log("ACS {}{} -> HTTP {} {}".format(name, path, code, text))
     set_output("acs_results", json.dumps(results))
-    ok = any(code == 200 for key, code in results.items() if key.endswith("/status"))
+    # /status wants a different credential; the apps list is what deploying needs.
+    ok = any(code == 200 for key, code in results.items() if "/apps/victoria" in key)
     log("ACS usable against this stack: {}".format(ok))
     set_output("acs_ok", "true" if ok else "false")
 
