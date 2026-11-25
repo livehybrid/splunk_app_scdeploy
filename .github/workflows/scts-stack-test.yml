@@ -121,6 +121,10 @@ jobs:
       - name: Install the app
         id: install
         shell: bash
+        env:
+          # For the AppInspect token ACS requires on a private app install.
+          SPLUNK_COM_USERNAME: ${{ secrets.SPLUNKBASE_USERNAME }}
+          SPLUNK_COM_PASSWORD: ${{ secrets.SPLUNKBASE_PASSWORD }}
         run: |
           python3 .github/scripts/scts.py install "${{ steps.stack.outputs.stack_id }}" \
             --package "${{ steps.pkg.outputs.package }}" \
@@ -137,10 +141,12 @@ jobs:
       - name: Mutant self-test (the checks must go red)
         shell: bash
         run: |
+          # The lookup route: the repacked mutant fails ACS's AppInspect
+          # vetting, and this step tests the checks, not the deploy channel.
           MP="$RUNNER_TEMP/${APP_ID}-mutant.tar.gz"
           MV=$(python3 .github/scripts/make_mutant.py "${{ steps.pkg.outputs.package }}" "${{ steps.pkg.outputs.version }}" "$MP")
           python3 .github/scripts/scts.py install "${{ steps.stack.outputs.stack_id }}" \
-            --package "$MP" --app-name "${APP_ID}" --expect-version "$MV"
+            --package "$MP" --app-name "${APP_ID}" --expect-version "$MV" --route lookup
           python3 .github/scripts/scts_functional.py "${{ steps.stack.outputs.stack_id }}" \
             --tag "m${{ github.run_id }}a${{ github.run_attempt }}" \
             --expect-fail delivered_token_authenticates
@@ -164,4 +170,5 @@ jobs:
             echo "| Built | \`${{ steps.pkg.outputs.version }}\` |"
             echo "| On stack | \`${{ steps.install.outputs.installed_version }}\` |"
             echo "| ACS answers (apps list) | ${{ steps.acs.outputs.acs_ok }} |"
+            echo "| Install route | ${{ steps.install.outputs.install_route }} |"
           } >> "$GITHUB_STEP_SUMMARY"

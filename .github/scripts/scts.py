@@ -562,10 +562,90 @@ class Stack:
                 data["entry"][0]["content"].get("version") if status == 200 else None)
         return out
 
-    def install(self, package_path: str, app_name: str) -> None:
-        """The lookup route. The app uploader page still renders (GET 200) on
-        Cloud 10.8 but its POST answers 404, so probing it proves nothing."""
+    def install_via_acs(self, package_path: str, app_name: str) -> bool:
+        """ACS (admin.splunk.com), the route scdeploy's users deploy with.
+
+        Proven on SCTS 10.8.0.1 (25 Nov 2026): the shared endpoint answers 400
+        "Extract app information from the package failed" (as it did on SCDE),
+        but that call vets the package; the targeted member route
+        `<sh-prefix>.<stack>` with `scope=local&splunkbase=false` then installs,
+        and the app reaches every search head member within seconds.
+
+        Needs splunk.com credentials (SPLUNK_COM_USERNAME / SPLUNK_COM_PASSWORD)
+        for the AppInspect token ACS wants in X-Splunk-Authorization. Returns
+        False, never raises, so the caller can fall back.
+        """
+        user = os.environ.get("SPLUNK_COM_USERNAME", "")
+        password = os.environ.get("SPLUNK_COM_PASSWORD", "")
+        if not (user and password):
+            log("ACS install skipped: no splunk.com credentials.")
+            return False
+        status, raw, _ = _request("GET", "https://api.splunk.com/2.0/rest/login/splunk", {
+            "Authorization": _basic_auth(user, password), "User-Agent": "scts.py"}, timeout=60)
+        try:
+            vet = json.loads(raw.decode("utf-8"))["data"]["token"]
+        except (ValueError, KeyError, TypeError):
+            log("ACS install skipped: splunk.com login answered HTTP {}.".format(status))
+            return False
+        mask(vet)
+        jwt = self.mint_token("scts-acs-install", "+2h")
+        if not jwt:
+            log("ACS install skipped: could not mint a stack token.")
+            return False
+        stack = (urllib.parse.urlsplit(self.web_url).hostname or "").split(".")[0]
+        with open(package_path, "rb") as fh:
+            payload = fh.read()
+
+        def post(target: str) -> Tuple[int, str]:
+            url = "https://admin.splunk.com/{}/adminconfig/v2/apps/victoria{}".format(
+                target, "?scope=local&splunkbase=false" if "." in target else "")
+            try:
+                code, body, _ = _request("POST", url, {
+                    "Authorization": "Bearer " + jwt, "X-Splunk-Authorization": vet,
+                    "ACS-Legal-Ack": "Y", "Content-Type": "application/octet-stream",
+                    "User-Agent": "scts.py"}, body=payload, timeout=1500)
+            except (urllib.error.URLError, OSError) as exc:
+                return 0, type(exc).__name__
+            text = body.decode("utf-8", "replace")
+            try:
+                parsed = json.loads(text)
+                text = json.dumps({k: parsed.get(k) for k in ("code", "message", "status", "version")
+                                   if k in parsed})
+            except ValueError:
+                text = text[:200]
+            return code, text.replace(jwt, "***").replace(vet, "***")[:300]
+
+        code, text = post(stack)
+        log("ACS shared install (also vets the package): HTTP {} {}".format(code, text))
+        if code in (200, 202):
+            return True
+        for attempt in range(1, 4):
+            status, info = self.mgmt("GET", "/services/server/info")
+            prefix = info["entry"][0]["content"]["serverName"].split(".")[0] if status == 200 else ""
+            if not prefix:
+                break
+            code, text = post("{}.{}".format(prefix, stack))
+            log("ACS targeted install via {} (try {}): HTTP {} {}".format(prefix, attempt, code, text))
+            if code in (200, 202):
+                return True
+            time.sleep(20)
+        return False
+
+    def install(self, package_path: str, app_name: str, route: str = "auto") -> str:
+        """Install; returns the route that worked.
+
+        auto = ACS, falling back to the lookup route with a warning. The app
+        uploader is not offered: on Cloud 10.8 its page renders (GET 200) but
+        the POST answers 404.
+        """
+        if route in ("auto", "acs") and self.install_via_acs(package_path, app_name):
+            return "acs"
+        if route == "acs":
+            fail("ACS install failed and --route acs allows no fallback.")
+        if route == "auto" and IN_ACTIONS:
+            print("::warning::ACS install failed; installed through the lookup route instead.", flush=True)
         self.install_via_lookup(package_path, app_name)
+        return "lookup"
 
     def mint_token(self, audience: str, expires_on: str = "+30m") -> str:
         # SCTS stacks ship with token authentication off.
@@ -691,7 +771,10 @@ def _resolve_conflict(client: Scts, reclaim: bool) -> bool:
         ours = _created_by_this_workflow(sid)
         log("Existing stack {} state={} created={} terminates={} created_by_this_workflow={}".format(
             sid, stack.get("state"), stack.get("createdAt"), stack.get("terminationDate"), ours))
-        if ours and reclaim:
+        if stack.get("state") == STATE_STOPPING:
+            log("Stack {} is already stopping; waiting for the quota to free.".format(sid))
+            retry = True
+        elif ours and reclaim:
             log("Deleting leftover stack {} from an earlier run of this workflow.".format(sid))
             retry = client.delete(sid) or retry
         elif ours:
@@ -770,7 +853,9 @@ def cmd_install(args: argparse.Namespace) -> None:
 
     if not os.path.isfile(args.package):
         fail("Package not found: {}".format(args.package))
-    stack.install(args.package, args.app_name or "app")
+    route = stack.install(args.package, args.app_name or "app", args.route)
+    set_output("install_route", route)
+    log("Install route used: {}".format(route))
 
     if args.app_name:
         version = None
@@ -902,6 +987,7 @@ def main(argv: Optional[list] = None) -> int:
     p_install.add_argument("stack_id")
     p_install.add_argument("--package", required=True, help="Path to the .tar.gz / .spl.")
     p_install.add_argument("--app-name", default=None, help="App id, to verify the install.")
+    p_install.add_argument("--route", choices=("auto", "acs", "lookup"), default="auto")
     p_install.add_argument("--expect-version", default=None,
                            help="Fail unless the stack reports exactly this version.")
     p_install.set_defaults(func=cmd_install)

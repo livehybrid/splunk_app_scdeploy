@@ -166,6 +166,12 @@ def _rows(data: Any) -> List[Dict[str, Any]]:
 
 # ---------------------------------------------------------------------------
 # Checks, in order. Later checks use state from earlier ones.
+#
+# Every object a check creates is named after the run tag. The stack is a
+# search head cluster and an EDITED stanza reaches the other members lazily: a
+# search on a stale member runs with the old settings (seen: a delivery sent to
+# the previous run's receiver). A NEW stanza on a stale member is simply
+# missing, which search_settled() retries.
 # ---------------------------------------------------------------------------
 
 @check("rest_handlers_load")
@@ -251,13 +257,13 @@ def _deliver(c: Ctx) -> None:
         _receiver_userinfo(c), member, sourcetype)
     # The destination names the user, the SPL names another: the destination wins.
     roles = c.state.setdefault("my_roles", _my_roles(c))
-    c.upsert("{}_dest_gitlab".format(APP), "ci_deliver", {
+    c.upsert("{}_dest_gitlab".format(APP), "ci_deliver_" + c.tag, {
         "hostname": hostname, "token": c.secret("glpat-ci-" + secrets.token_hex(8)),
         "projectid": "1", "user": c.user, "limit_role": "|".join(roles),
     })
     status, data, raw = c.search_settled(
-        "| gendeploytoken destination_type=gitlab destination_name=ci_deliver "
-        "user=scdeploy_ci_not_this_user audience={} expires_on=+20m".format(aud))
+        "| gendeploytoken destination_type=gitlab destination_name=ci_deliver_{} "
+        "user=scdeploy_ci_not_this_user audience={} expires_on=+20m".format(c.tag, aud))
     c.state["deliver_raw"] = raw
     rows = _rows(data)
     require(status == 200 and len(rows) == 1,
@@ -343,13 +349,13 @@ def _no_leak(c: Ctx) -> None:
 @check("limit_role_refuses")
 def _refuse(c: Ctx) -> None:
     aud = "scdeployci_denied_" + c.tag
-    c.upsert("{}_dest_gitlab".format(APP), "ci_denied", {
+    c.upsert("{}_dest_gitlab".format(APP), "ci_denied_" + c.tag, {
         "hostname": "gitlab.invalid", "token": c.secret("glpat-ci-" + secrets.token_hex(8)),
         "projectid": "1", "limit_role": "scdeploy_ci_no_such_role",
     })
     status, data, raw = c.search_settled(
-        "| gendeploytoken destination_type=gitlab destination_name=ci_denied "
-        "user={} audience={}".format(c.user, aud))
+        "| gendeploytoken destination_type=gitlab destination_name=ci_denied_{} "
+        "user={} audience={}".format(c.tag, c.user, aud))
     require("Unauthorised to run" in raw, "a caller outside limit_role was not refused: {}".format(
         _messages(data) or raw[:300]))
     # Positive control for this count is minted_token_listed_for_user, which
@@ -369,7 +375,7 @@ def _cleaner(c: Ctx) -> None:
         c.secret(content.get("token", ""))
         ids[label] = content["id"]
     time.sleep(15)
-    c.upsert("{}_token_cleaner".format(APP), "ci_cleaner", {
+    c.upsert("{}_token_cleaner".format(APP), "ci_cleaner_" + c.tag, {
         "min_expiry": "0", "interval": "20", "limit": "10"})
     remaining = set()
     deadline = time.time() + 300
@@ -378,7 +384,7 @@ def _cleaner(c: Ctx) -> None:
         if ids["expired1"] not in remaining and ids["expired2"] not in remaining:
             break
         time.sleep(15)
-    c.rest("DELETE", c.ns("{}_token_cleaner/ci_cleaner".format(APP)))
+    c.rest("DELETE", c.ns("{}_token_cleaner/ci_cleaner_{}".format(APP, c.tag)))
     require(ids["expired1"] not in remaining and ids["expired2"] not in remaining,
             "expired tokens were not removed within 5 minutes")
     require(ids["live"] in remaining, "the cleaner removed a token that has not expired")
