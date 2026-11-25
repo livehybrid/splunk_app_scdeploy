@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-set -x
+# No set -x: it traces the bearer tokens this script handles into the log.
 
 # Validate required environment variables
 if [ -z "$ACS_STACK" ]; then
