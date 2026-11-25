@@ -9,7 +9,8 @@
 # and a fork must neither spend that nor see the token (pull_request_target
 # would hand it over). Dispatch and a weekly schedule only.
 #
-# Provisioning takes 55 to 75 minutes, hence the long timeouts.
+# Provisioning took 89 min (10.8.0.1) and over 130 min (10.8.0.2, never
+# finished) on 25 Nov 2026, hence a 180 min wait.
 name: SCTS stack test
 
 on:
@@ -50,7 +51,7 @@ jobs:
     name: functional checks on an SCTS stack
     needs: package
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 330
     env:
       SCTS_API_TOKEN: ${{ secrets.SCTS_API_TOKEN }}
       # Read-only use: looking up this repo's own scts-stack-<id> artefacts.
@@ -109,7 +110,7 @@ jobs:
       - name: Wait for RUNNING and credentials
         id: wait
         shell: bash
-        run: python3 .github/scripts/scts.py wait "${{ steps.stack.outputs.stack_id }}" --timeout 7800 --interval 30
+        run: python3 .github/scripts/scts.py wait "${{ steps.stack.outputs.stack_id }}" --timeout 10800 --interval 30
 
       - name: Probe ACS against the stack
         id: acs
