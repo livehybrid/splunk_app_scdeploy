@@ -54,8 +54,25 @@ def _wait_kvstore_ready(conn, timeout=420):
                 return
         except binding.HTTPError as e:
             last = e.status
+        if str(last).lower() == "failed":
+            # Seen on this repo's 10.2 image only: the KV store never starts,
+            # so no token can exist there. Say why, with splunkd's own words.
+            pytest.skip(f"KV store status 'failed' on this instance; token tests cannot run. "
+                        f"Recent KV store errors: {_kvstore_errors(conn)}")
         time.sleep(5)
     pytest.fail(f"KV store not ready within {timeout}s (last status {last!r})")
+
+
+def _kvstore_errors(conn):
+    try:
+        resp = conn.post("/services/search/jobs", exec_mode="oneshot", output_mode="json", count=8,
+                         search="search index=_internal (source=*mongod.log* OR component=KVStore*) "
+                                "(ERROR OR error OR fatal OR Fatal OR fail*) earliest=-30m "
+                                "| head 8 | table _raw")
+        rows = _json(resp).get("results", [])
+        return " || ".join(r.get("_raw", "")[:300] for r in rows) or "none found"
+    except Exception as exc:  # diagnostics only
+        return f"(search failed: {exc})"
 
 
 @pytest.fixture
