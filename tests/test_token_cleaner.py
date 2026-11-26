@@ -42,9 +42,26 @@ def _mint(conn, audience, expires_on):
     return data["entry"][0]["content"]["id"]
 
 
+def _wait_kvstore_ready(conn, timeout=420):
+    """Token creation needs the KV store, which can still be starting after
+    the container reports ready (seen on 10.2)."""
+    deadline, last = time.time() + timeout, None
+    while time.time() < deadline:
+        try:
+            data = _json(conn.get("/services/kvstore/status", output_mode="json"))
+            last = data["entry"][0]["content"].get("current", {}).get("status")
+            if str(last).lower() == "ready":
+                return
+        except binding.HTTPError as e:
+            last = e.status
+        time.sleep(5)
+    pytest.fail(f"KV store not ready within {timeout}s (last status {last!r})")
+
+
 @pytest.fixture
 def token_auth(splunk):
     conn = _conn(splunk)
+    _wait_kvstore_ready(conn)
     conn.post("/services/admin/token-auth/tokens_auth", disabled="false")
     return conn
 
@@ -59,7 +76,8 @@ def test_cleaner_stops_at_limit(token_auth):
 
     now = time.time()
     before = _tokens(conn)
-    assert expired <= set(before), "minted tokens missing from the listing"
+    missing = len(expired - set(before))
+    assert missing == 0, f"{missing} minted tokens missing from the listing"
     expired_before = {t for t, exp in before.items() if exp < now}
     assert len(expired_before) >= N_EXPIRED > LIMIT
 
@@ -83,8 +101,10 @@ def test_cleaner_stops_at_limit(token_auth):
             except binding.HTTPError:
                 pass
 
-    removed = expired_before - after
-    assert removed, "the cleaner removed nothing within 4 minutes (did it run?)"
-    assert len(removed) == LIMIT, (
-        f"limit={LIMIT} but {len(removed)} of {len(expired_before)} expired tokens were removed")
-    assert live in after, "the cleaner removed a token that has not expired"
+    # Counts only: token ids stay out of the CI log.
+    n_removed = len(expired_before - after)
+    n_expired = len(expired_before)
+    live_kept = live in after
+    assert n_removed > 0, "the cleaner removed nothing within 4 minutes (did it run?)"
+    assert n_removed == LIMIT, f"limit={LIMIT} but {n_removed} of {n_expired} expired tokens were removed"
+    assert live_kept, "the cleaner removed a token that has not expired"
