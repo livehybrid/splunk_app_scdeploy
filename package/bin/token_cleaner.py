@@ -90,6 +90,9 @@ class TOKEN_CLEANER(BaseModInput):
                 token_expiry = int(token['content']['claims']['exp'])
                 # Check if the token expired longer ago than the current time minus expiry_offset
                 if token_expiry < (time_now - int(expiry_offset)):
+                    if removed_tokens >= delete_limit:
+                        self.log_info(f"Stopping token remover as reached per-run delete_limit={delete_limit}")
+                        break
                     removed_tokens = removed_tokens+1
                     # Token is expired, delete it
                     token_name = token['name']
@@ -99,9 +102,6 @@ class TOKEN_CLEANER(BaseModInput):
                     if delete_response.status != 200:
                         self.log_critical(f"Error removing token={token_name}")
                         self.log_warning(delete_response.body.read())
-                    if removed_tokens>=delete_limit:
-                        self.log_info(f"Stopping token remover as reached per-run delete_limit={delete_limit}")
-                        continue
 
             self.log_info(f"Removed {removed_tokens} on this iteration")
         except Exception as e:
