@@ -1,8 +1,7 @@
 #!/bin/bash
-set -x
+# No set -x: it traces the bearer tokens this script handles into the log.
 export STACK=$1
 export SPLUNKBASE_TOKEN=$(./scripts/splunkbase_auth.sh)
-echo $SPLUNKBASE_TOKEN
 app_file=dist/$(/bin/ls -1 dist/)
 echo "Uploading file $app_file"
 export APPINSPECT_UPLOAD_ID=$(./scripts/appinspect_upload.sh $app_file)

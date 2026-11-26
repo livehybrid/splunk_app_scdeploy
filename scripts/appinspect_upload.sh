@@ -1,4 +1,4 @@
-set -x
+# No set -x: it traces the bearer tokens this script handles into the log.
 resp=$(curl --location -s --request POST 'https://appinspect.splunk.com/v1/app/validate' \
 --header "Authorization: bearer $SPLUNKBASE_TOKEN" \
 --form "app_package=@$1" \
