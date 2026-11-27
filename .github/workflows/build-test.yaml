@@ -103,6 +103,14 @@ jobs:
         with:
           submodules: true
 
+      # Splunk refuses searches below 5 GB free in its dispatch dir; a Splunk
+      # image or two left ubuntu-24.04 at ~13 GB (TA-aws-health, 26 Nov 2026).
+      # Drop preinstalled toolchains no job here uses.
+      - name: Free runner disk
+        run: |
+          df -h / | tail -1
+          sudo rm -r -f /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h / | tail -1
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
